@@ -1,47 +1,34 @@
-export const dynamic = "force-dynamic";
+"use client";
+import { useState } from "react";
 
-import { headers } from "next/headers";
+export default function EditRoom() {
+  const [form, setForm] = useState({ user: "", purpose: "", time: "", pass: "" });
 
-async function getData() {
-  const h = headers();
-  const host = h.get("host");
-  const protocol = host?.includes("localhost") ? "http" : "https";
-
-  const res = await fetch(`${protocol}://${host}/api/room`, {
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch room data");
-  }
-
-  return res.json();
-}
-
-export default async function Home() {
-  const data = await getData();
+  const updateRoom = async () => {
+    if (form.pass !== "1234") { // パスコード例
+      alert("パスコードが違います");
+      return;
+    }
+    await fetch("/api/room", {
+      method: "POST",
+      body: JSON.stringify(form),
+    });
+    alert("更新しました！");
+  };
 
   return (
-    <div
-      style={{
-        height: "100vh",
-        background: "#000",
-        color: "#fff",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <h1 style={{ fontSize: "48px" }}>会議室 使用状況</h1>
-      <div style={{ fontSize: "32px", lineHeight: "1.8" }}>
-        <p>使用者：{data.user}</p>
-        <p>目的　：{data.purpose}</p>
-        <p>時間　：{data.time}</p>
+    <div style={{ padding: "50px", fontSize: "20px", maxWidth: "600px", margin: "0 auto" }}>
+      <h1>会議室 予約入力</h1>
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <input type="text" placeholder="利用者名" onChange={e => setForm({...form, user: e.target.value})} style={{fontSize: "20px", padding: "10px"}} />
+        <input type="text" placeholder="利用目的" onChange={e => setForm({...form, purpose: e.target.value})} style={{fontSize: "20px", padding: "10px"}} />
+        <input type="time" onChange={e => setForm({...form, time: e.target.value})} style={{fontSize: "20px", padding: "10px"}} />
+        <hr />
+        <input type="password" placeholder="パスコード" onChange={e => setForm({...form, pass: e.target.value})} style={{fontSize: "20px", padding: "10px"}} />
+        <button onClick={updateRoom} style={{padding: "20px", backgroundColor: "#0070f3", color: "white", border: "none", fontSize: "20px", cursor: "pointer"}}>
+          表示を更新する
+        </button>
       </div>
-      <a href="/edit" style={{ marginTop: 40, color: "#aaa" }}>
-        変更
-      </a>
     </div>
   );
 }
