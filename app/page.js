@@ -1,7 +1,7 @@
 async function getData() {
-  const res = await fetch(process.env.NEXT_PUBLIC_BASE_URL + "/api/room", { cache: "no-store" });
-  return res.json();
-}
+  const res = await fetch("http://localhost:3000/api/room", {
+  cache: "no-store"
+});
 
 export default async function Home() {
   const data = await getData();
