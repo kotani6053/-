@@ -1,7 +1,9 @@
 async function getData() {
   const res = await fetch("http://localhost:3000/api/room", {
-  cache: "no-store"
-});
+    cache: "no-store"
+  });
+  return res.json();
+}
 
 export default async function Home() {
   const data = await getData();
