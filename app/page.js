@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 async function getData() {
   const res = await fetch("/api/room", {
     cache: "no-store",
@@ -32,3 +34,4 @@ export default async function Home() {
     </div>
   );
 }
+
