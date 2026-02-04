@@ -1,9 +1,20 @@
 export const dynamic = "force-dynamic";
 
+import { headers } from "next/headers";
+
 async function getData() {
-  const res = await fetch("/api/room", {
+  const h = headers();
+  const host = h.get("host");
+  const protocol = host?.includes("localhost") ? "http" : "https";
+
+  const res = await fetch(`${protocol}://${host}/api/room`, {
     cache: "no-store",
   });
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch room data");
+  }
+
   return res.json();
 }
 
@@ -34,4 +45,3 @@ export default async function Home() {
     </div>
   );
 }
-
