@@ -2,32 +2,30 @@ export const dynamic = "force-dynamic";
 
 let roomState = {
   occupied: false,
-  user: "",
-  purpose: "",
+  dept: "",     // 利用部署
+  user: "",     // 利用者（役職）
+  purpose: "",  // 利用目的
   startTime: "",
   endTime: ""
 };
 
 export async function GET() {
-  return new Response(JSON.stringify(roomState), {
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
-      "Pragma": "no-cache",
-      "Expires": "0",
-    },
+  return Response.json(roomState, {
+    headers: { "Cache-Control": "no-store, max-age=0" }
   });
 }
 
 export async function POST(req) {
   const data = await req.json();
+  
   if (data.action === "release") {
-    roomState = { occupied: false, user: "", purpose: "", startTime: "", endTime: "" };
+    roomState = { occupied: false, dept: "", user: "", purpose: "", startTime: "", endTime: "" };
   } else {
     roomState = {
       occupied: true,
-      user: data.user || "名無し",
-      purpose: data.purpose || "会議中",
+      dept: data.dept || "不明",
+      user: data.user || "不明",
+      purpose: data.purpose || "会議",
       startTime: data.startTime || "",
       endTime: data.endTime || ""
     };
