@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-// サーバーメモリ上でデータを保持
+// サーバーメモリに保存（誰でも書き換え可能）
 let roomData = {
   user: "未使用",
   purpose: "空室",
