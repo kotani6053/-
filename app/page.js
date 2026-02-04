@@ -1,50 +1,81 @@
-// app/edit/page.js
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export default function EditRoom() {
-  const [form, setForm] = useState({ user: "", purpose: "", time: "", pass: "" });
+export default function RoomDisplay() {
+  const [data, setData] = useState({ user: "読込中...", purpose: "", time: "" });
 
-  const updateRoom = async () => {
-    // 簡易バリデーション
-    if (form.pass !== "1234") { 
-      alert("パスコードが違います");
-      return;
-    }
-
+  const fetchStatus = async () => {
     try {
-      const res = await fetch("/api/room", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json", // これが重要！
-        },
-        body: JSON.stringify(form),
-      });
-
-      if (res.ok) {
-        alert("表示を更新しました！TOP画面を確認してください。");
-      } else {
-        alert("サーバーエラーが発生しました。");
-      }
-    } catch (e) {
-      alert("通信に失敗しました。");
-    }
+      const res = await fetch(`/api/room?t=${Date.now()}`, { cache: "no-store" });
+      const json = await res.json();
+      setData(json);
+    } catch (e) { console.error("通信エラー"); }
   };
 
+  useEffect(() => {
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 3000); // 3秒おきに最新化
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleRelease = async () => {
+    await fetch("/api/room", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "release" }),
+    });
+    fetchStatus();
+  };
+
+  const isOccupied = data.user !== "未使用";
+
   return (
-    <div style={{ padding: "40px", maxWidth: "500px", margin: "0 auto", fontFamily: "sans-serif" }}>
-      <h2 style={{ borderBottom: "2px solid #333" }}>会議室 表示設定</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: "15px", marginTop: "20px" }}>
-        <label>利用者名: <input type="text" style={{padding:"8px", width:"100%"}} onChange={e => setForm({...form, user: e.target.value})} /></label>
-        <label>利用目的: <input type="text" style={{padding:"8px", width:"100%"}} onChange={e => setForm({...form, purpose: e.target.value})} /></label>
-        <label>開始時間: <input type="time" style={{padding:"8px", width:"100%"}} onChange={e => setForm({...form, time: e.target.value})} /></label>
-        <label style={{marginTop: "20px", color: "red"}}>パスコード: 
-          <input type="password" style={{padding:"8px", width:"100%", border: "1px solid red"}} onChange={e => setForm({...form, pass: e.target.value})} />
-        </label>
-        <button onClick={updateRoom} style={{padding: "15px", backgroundColor: "#0070f3", color: "white", border: "none", fontWeight: "bold", cursor: "pointer", marginTop: "10px"}}>
-          この内容で表示を更新
-        </button>
+    <div style={{
+      backgroundColor: isOccupied ? "#E63946" : "#2A9D8F",
+      color: "white",
+      height: "100vh",
+      width: "100vw",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      alignItems: "center",
+      fontFamily: "'Inter', sans-serif",
+      textAlign: "center"
+    }}>
+      <h1 style={{ fontSize: "22vw", margin: 0, fontWeight: "900", letterSpacing: "-0.05em" }}>
+        {isOccupied ? "使用中" : "空室"}
+      </h1>
+
+      <div style={{ fontSize: "6vw", fontWeight: "bold", marginTop: "20px" }}>
+        {isOccupied ? (
+          <div>
+            <p style={{ margin: 0 }}>{data.purpose}</p>
+            <p style={{ margin: 0, opacity: 0.8 }}>{data.user} {data.time && `| ${data.time}~`}</p>
+          </div>
+        ) : (
+          <p style={{ opacity: 0.7 }}>ご自由にお入りください</p>
+        )}
       </div>
+
+      {isOccupied && (
+        <button
+          onClick={handleRelease}
+          style={{
+            marginTop: "10vh",
+            padding: "3vh 10vw",
+            fontSize: "5vw",
+            borderRadius: "100px",
+            border: "none",
+            backgroundColor: "white",
+            color: "#E63946",
+            fontWeight: "900",
+            cursor: "pointer",
+            boxShadow: "0 15px 50px rgba(0,0,0,0.3)"
+          }}
+        >
+          終了（空室にする）
+        </button>
+      )}
     </div>
   );
 }
