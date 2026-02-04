@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const revalidate = 0; // キャッシュ時間を0秒にする
 
 let roomState = {
   occupied: false,
@@ -9,7 +10,13 @@ let roomState = {
 };
 
 export async function GET() {
-  return Response.json(roomState, { headers: { "Cache-Control": "no-store" } });
+  return Response.json(roomState, {
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
+    },
+  });
 }
 
 export async function POST(req) {
