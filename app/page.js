@@ -5,13 +5,13 @@ export default function TabletDisplay() {
   const [data, setData] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   
-  // プリセット（よく使う項目）
-  const userPresets = ["営業部", "開発部", "人事部", "来客"];
-  const purposePresets = ["定例会議", "面談", "集中作業", "その他"];
+  // 【ご指定のプリセットに更新】
+  const userPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
+  const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
 
   const [form, setForm] = useState({ user: "", purpose: "", startTime: "10:00", endTime: "11:00" });
 
-  // 10分刻みの時間リスト
+  // 10分刻みの時間リスト (00:00 〜 23:50)
   const timeOptions = [];
   for (let h = 0; h < 24; h++) {
     for (let m = 0; m < 60; m += 10) {
@@ -35,6 +35,10 @@ export default function TabletDisplay() {
   }, []);
 
   const handleReserve = async () => {
+    if (!form.user || !form.purpose) {
+      alert("利用者と目的を選択してください");
+      return;
+    }
     await fetch("/api/room", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -57,7 +61,7 @@ export default function TabletDisplay() {
 
   return (
     <div style={containerStyle(data.occupied)}>
-      {/* メイン表示 */}
+      {/* メイン表示：特大文字 */}
       <h1 style={{ fontSize: "20vw", margin: 0, fontWeight: "900" }}>
         {data.occupied ? "使用中" : "空室"}
       </h1>
@@ -66,7 +70,7 @@ export default function TabletDisplay() {
         {data.occupied ? (
           <div>
             <p style={{ margin: "5px 0", fontSize: "7vw" }}>{data.purpose}</p>
-            <p style={{ margin: 0 }}>{data.user} 様</p>
+            <p style={{ margin: 0 }}>{data.user}</p>
             <p style={timeLabelStyle}>{data.startTime} 〜 {data.endTime}</p>
           </div>
         ) : (
@@ -82,21 +86,19 @@ export default function TabletDisplay() {
         )}
       </div>
 
-      {/* 入力モーダル（かんたん選択版） */}
+      {/* 入力モーダル */}
       {isEditing && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
-            <h2 style={{color:"#333", fontSize:"3vw", margin:0}}>利用登録</h2>
+            <h2 style={{color:"#333", fontSize:"3vw", marginBottom: "10px"}}>利用登録</h2>
             
-            {/* 利用者選択 */}
-            <div style={labelStyle}>利用者</div>
+            <div style={labelStyle}>利用者（部署名）</div>
             <div style={presetGroupStyle}>
               {userPresets.map(u => (
                 <button key={u} onClick={() => setForm({...form, user: u})} style={presetButtonStyle(form.user === u)}>{u}</button>
               ))}
             </div>
 
-            {/* 目的選択 */}
             <div style={labelStyle}>利用目的</div>
             <div style={presetGroupStyle}>
               {purposePresets.map(p => (
@@ -104,7 +106,6 @@ export default function TabletDisplay() {
               ))}
             </div>
             
-            {/* 時間選択 */}
             <div style={labelStyle}>利用時間</div>
             <div style={{display:"flex", alignItems:"center", gap:"15px", justifyContent:"center"}}>
               <select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>
@@ -116,9 +117,9 @@ export default function TabletDisplay() {
               </select>
             </div>
             
-            <div style={{display:"flex", gap:"15px", marginTop:"20px"}}>
+            <div style={{display:"flex", gap:"15px", marginTop:"30px", justifyContent: "center"}}>
               <button onClick={handleReserve} style={buttonStyle("#2B9348", "#fff", "3vw")}>登録する</button>
-              <button onClick={() => setIsEditing(false)} style={buttonStyle("#666", "#fff", "3vw")}>戻る</button>
+              <button onClick={() => setIsEditing(false)} style={buttonStyle("#666", "#fff", "3vw")}>キャンセル</button>
             </div>
           </div>
         </div>
@@ -127,30 +128,31 @@ export default function TabletDisplay() {
   );
 }
 
-/* --- スタイル定義 --- */
+/* --- デザイン・スタイル --- */
 const containerStyle = (occupied) => ({
   backgroundColor: occupied ? "#D90429" : "#2B9348",
   color: "white", height: "100vh", width: "100vw",
   display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
-  fontFamily: "sans-serif", textAlign: "center", position: "relative", overflow: "hidden"
+  fontFamily: "'Inter', sans-serif", textAlign: "center", position: "relative", overflow: "hidden"
 });
 
 const timeLabelStyle = {
-  margin: "10px 0", backgroundColor: "rgba(0,0,0,0.2)", padding: "10px 30px", borderRadius: "50px", display: "inline-block"
+  margin: "10px 0", backgroundColor: "rgba(0,0,0,0.2)", padding: "10px 40px", borderRadius: "50px", display: "inline-block"
 };
 
-const labelStyle = { color: "#666", fontSize: "1.5vw", textAlign: "left", width: "100%", marginLeft: "10%" };
+const labelStyle = { color: "#555", fontSize: "1.8vw", textAlign: "left", width: "90%", margin: "10px auto 5px", fontWeight: "bold" };
 
-const presetGroupStyle = { display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "center" };
+const presetGroupStyle = { display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", width: "100%" };
 
 const presetButtonStyle = (isSelected) => ({
-  padding: "1.5vh 3vw", fontSize: "2vw", borderRadius: "10px", border: isSelected ? "none" : "2px solid #ddd",
-  backgroundColor: isSelected ? "#1D3557" : "#fff", color: isSelected ? "#fff" : "#333", cursor: "pointer", fontWeight: "bold"
+  padding: "1.8vh 3.5vw", fontSize: "2.2vw", borderRadius: "12px", border: isSelected ? "none" : "2px solid #eee",
+  backgroundColor: isSelected ? "#1D3557" : "#f8f9fa", color: isSelected ? "#fff" : "#333", cursor: "pointer", fontWeight: "bold",
+  transition: "0.2s"
 });
 
-const buttonStyle = (bg, col, fsize = "4vw") => ({
-  padding: "2vh 6vw", fontSize: fsize, borderRadius: "100px", border: "none",
-  backgroundColor: bg, color: col, fontWeight: "900", cursor: "pointer", boxShadow: "0 8px 20px rgba(0,0,0,0.2)"
+const buttonStyle = (bg, col, fsize = "4.5vw") => ({
+  padding: "2.5vh 8vw", fontSize: fsize, borderRadius: "100px", border: "none",
+  backgroundColor: bg, color: col, fontWeight: "900", cursor: "pointer", boxShadow: "0 10px 25px rgba(0,0,0,0.2)"
 });
 
 const modalOverlayStyle = {
@@ -159,10 +161,10 @@ const modalOverlayStyle = {
 };
 
 const modalContentStyle = {
-  backgroundColor: "white", padding: "3vw", borderRadius: "30px",
-  display: "flex", flexDirection: "column", gap: "15px", width: "85%", maxWidth: "900px"
+  backgroundColor: "white", padding: "4vw", borderRadius: "40px",
+  display: "flex", flexDirection: "column", gap: "10px", width: "90%", maxWidth: "1000px"
 };
 
 const selectStyle = {
-  padding: "1.5vh 2vw", fontSize: "3vw", borderRadius: "12px", border: "2px solid #eee", backgroundColor: "#f9f9f9"
+  padding: "1.5vh 3vw", fontSize: "3.5vw", borderRadius: "15px", border: "2px solid #ddd", backgroundColor: "#fff", color: "#333"
 };
