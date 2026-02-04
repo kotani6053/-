@@ -1,6 +1,6 @@
 async function getData() {
-  const res = await fetch("http://localhost:3000/api/room", {
-    cache: "no-store"
+  const res = await fetch("/api/room", {
+    cache: "no-store",
   });
   return res.json();
 }
