@@ -1,3 +1,4 @@
+// app/edit/page.js
 "use client";
 import { useState } from "react";
 
@@ -5,28 +6,43 @@ export default function EditRoom() {
   const [form, setForm] = useState({ user: "", purpose: "", time: "", pass: "" });
 
   const updateRoom = async () => {
-    if (form.pass !== "1234") { // パスコード例
+    // 簡易バリデーション
+    if (form.pass !== "1234") { 
       alert("パスコードが違います");
       return;
     }
-    await fetch("/api/room", {
-      method: "POST",
-      body: JSON.stringify(form),
-    });
-    alert("更新しました！");
+
+    try {
+      const res = await fetch("/api/room", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json", // これが重要！
+        },
+        body: JSON.stringify(form),
+      });
+
+      if (res.ok) {
+        alert("表示を更新しました！TOP画面を確認してください。");
+      } else {
+        alert("サーバーエラーが発生しました。");
+      }
+    } catch (e) {
+      alert("通信に失敗しました。");
+    }
   };
 
   return (
-    <div style={{ padding: "50px", fontSize: "20px", maxWidth: "600px", margin: "0 auto" }}>
-      <h1>会議室 予約入力</h1>
-      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-        <input type="text" placeholder="利用者名" onChange={e => setForm({...form, user: e.target.value})} style={{fontSize: "20px", padding: "10px"}} />
-        <input type="text" placeholder="利用目的" onChange={e => setForm({...form, purpose: e.target.value})} style={{fontSize: "20px", padding: "10px"}} />
-        <input type="time" onChange={e => setForm({...form, time: e.target.value})} style={{fontSize: "20px", padding: "10px"}} />
-        <hr />
-        <input type="password" placeholder="パスコード" onChange={e => setForm({...form, pass: e.target.value})} style={{fontSize: "20px", padding: "10px"}} />
-        <button onClick={updateRoom} style={{padding: "20px", backgroundColor: "#0070f3", color: "white", border: "none", fontSize: "20px", cursor: "pointer"}}>
-          表示を更新する
+    <div style={{ padding: "40px", maxWidth: "500px", margin: "0 auto", fontFamily: "sans-serif" }}>
+      <h2 style={{ borderBottom: "2px solid #333" }}>会議室 表示設定</h2>
+      <div style={{ display: "flex", flexDirection: "column", gap: "15px", marginTop: "20px" }}>
+        <label>利用者名: <input type="text" style={{padding:"8px", width:"100%"}} onChange={e => setForm({...form, user: e.target.value})} /></label>
+        <label>利用目的: <input type="text" style={{padding:"8px", width:"100%"}} onChange={e => setForm({...form, purpose: e.target.value})} /></label>
+        <label>開始時間: <input type="time" style={{padding:"8px", width:"100%"}} onChange={e => setForm({...form, time: e.target.value})} /></label>
+        <label style={{marginTop: "20px", color: "red"}}>パスコード: 
+          <input type="password" style={{padding:"8px", width:"100%", border: "1px solid red"}} onChange={e => setForm({...form, pass: e.target.value})} />
+        </label>
+        <button onClick={updateRoom} style={{padding: "15px", backgroundColor: "#0070f3", color: "white", border: "none", fontWeight: "bold", cursor: "pointer", marginTop: "10px"}}>
+          この内容で表示を更新
         </button>
       </div>
     </div>
