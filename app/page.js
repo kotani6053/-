@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 // --- 追加：Firebaseの設定を読み込む ---
-import { db } from "@/lib/firebase"; 
+import { db } from "../lib/firebase"; 
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 
 export default function TabletDisplay() {
