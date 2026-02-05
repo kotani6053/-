@@ -7,7 +7,7 @@ import { collection, query, where, onSnapshot } from "firebase/firestore";
 export default function TabletDisplay() {
   const [data, setData] = useState({ occupied: false });
   const [isEditing, setIsEditing] = useState(false);
-  const roomName = "会議室A"; // kotaniappで登録している部屋名と一致させてください
+  const roomName = "3階応接室"; // kotaniappで登録している部屋名と一致させてください
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
   const userPresets = ["役員", "部長", "次長", "課長", "係長", "主任", "その他"];
