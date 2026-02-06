@@ -9,13 +9,13 @@ export default function TabletDisplay() {
   const [isEditing, setIsEditing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   
-  const roomName = "3階応接室"; 
+  // ★ ここを「会議室」または「応接室」に書き換えてください
+  const roomName = "会議室"; 
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
   const userPresets = ["役員", "部長", "次長", "課長", "係長", "主任", "その他"];
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
-  // userを配列に変更
   const [form, setForm] = useState({ dept: "", user: [], purpose: "", clientName: "", startTime: "08:00", endTime: "09:00" });
 
   useEffect(() => {
@@ -23,6 +23,7 @@ export default function TabletDisplay() {
     return () => clearInterval(timer);
   }, []);
 
+  // リアルタイム監視（指定した部屋名のみを抽出）
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -36,7 +37,7 @@ export default function TabletDisplay() {
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const todayRes = allRes
         .filter(res => res.date === currentDateStr)
-        .sort((a, b) => a.startTime.slice(0, 5).localeCompare(b.startTime.slice(0, 5)));
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
       setReservations(todayRes);
 
@@ -51,15 +52,12 @@ export default function TabletDisplay() {
     return () => unsubscribe();
   }, [roomName]);
 
-  // 役職ボタンのトグル処理
   const toggleUser = (u) => {
     setForm(prev => {
       const currentUsers = prev.user;
       if (currentUsers.includes(u)) {
-        // すでに選択されていれば削除（キャンセル）
         return { ...prev, user: currentUsers.filter(item => item !== u) };
       } else {
-        // 選択されていなければ追加
         return { ...prev, user: [...currentUsers, u] };
       }
     });
@@ -74,7 +72,7 @@ export default function TabletDisplay() {
     });
 
     if (isOverlapping) {
-      alert("⚠️エラー：この時間帯は既に他の予約が入っています。");
+      alert(`⚠️エラー：${roomName}は、この時間帯に既に予約が入っています。`);
       return;
     }
 
@@ -85,7 +83,7 @@ export default function TabletDisplay() {
       await addDoc(collection(db, "reservations"), {
         room: roomName, 
         department: form.dept, 
-        name: form.user.join("、"), // 配列を「、」で繋いで保存
+        name: form.user.join("、"), 
         purpose: form.purpose, 
         clientName: form.clientName, 
         startTime: form.startTime, 
@@ -94,12 +92,12 @@ export default function TabletDisplay() {
         createdAt: new Date()
       });
       setIsEditing(false);
-      setForm({ ...form, user: [], clientName: "" }); // リセット
+      setForm({ ...form, user: [], clientName: "" });
     } catch (e) { alert("予約に失敗しました"); }
   };
 
   const handleRelease = async () => {
-    if (data.id && window.confirm("会議を終了し、空室に戻しますか？")) {
+    if (data.id && window.confirm(`${roomName}の会議を終了し、空室に戻しますか？`)) {
       await deleteDoc(doc(db, "reservations", data.id));
     }
   };
@@ -121,6 +119,7 @@ export default function TabletDisplay() {
       <div style={{ ...screenStyle, backgroundColor: "#D90429" }}>
         <Clock />
         <div style={{ fontSize: "10vw", fontWeight: "900" }}>使用中</div>
+        <div style={{ fontSize: "3vw", opacity: 0.8 }}>{roomName}</div>
         <div style={infoBoxStyle}>
           <div style={{ fontSize: "6vw", fontWeight: "bold" }}>{data.purpose}{data.clientName && `（${data.clientName}様）`}</div>
           <div style={{ fontSize: "4vw", margin: "10px 0" }}>{data.dept}：{data.user}</div>
@@ -134,7 +133,7 @@ export default function TabletDisplay() {
           <div style={modalOverlayStyle}>
             <div style={modalContentStyle}>
               <div style={sectionBox}>
-                <div style={sectionLabel}>本日の予約状況</div>
+                <div style={sectionLabel}>{roomName} 本日の予約状況</div>
                 <div style={resListStyle}>
                   {reservations.length > 0 ? reservations.map(res => (
                     <div key={res.id} style={resCardStyle}><b>{res.startTime}-{res.endTime}</b><br/>{res.name}</div>
@@ -161,7 +160,7 @@ export default function TabletDisplay() {
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
             <div style={sectionBox}>
-              <div style={sectionLabel}>本日の予約状況</div>
+              <div style={sectionLabel}>{roomName} 本日の予約状況</div>
               <div style={resListStyle}>
                 {reservations.length > 0 ? reservations.map(res => (
                   <div key={res.id} style={resCardStyle}><b>{res.startTime}-{res.endTime}</b><br/>{res.name}</div>
@@ -179,13 +178,7 @@ export default function TabletDisplay() {
                 <div style={sectionLabel}>2. 利用者（役職/複数可）</div>
                 <div style={gridStyle}>
                   {userPresets.map(u => (
-                    <button 
-                      key={u} 
-                      onClick={() => toggleUser(u)} 
-                      style={pBtnStyle(form.user.includes(u))} // 配列に含まれていれば色付け
-                    >
-                      {u}
-                    </button>
+                    <button key={u} onClick={() => toggleUser(u)} style={pBtnStyle(form.user.includes(u))}>{u}</button>
                   ))}
                 </div>
               </div>
@@ -222,7 +215,7 @@ export default function TabletDisplay() {
   );
 }
 
-// スタイルは変更なし
+// スタイル定義は前回と同様
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.1)", padding: "40px", borderRadius: "30px", margin: "20px 0" };
 const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "10px 40px", borderRadius: "50px", fontSize: "4vw", fontWeight: "900" };
@@ -236,18 +229,7 @@ const sectionLabel = { fontSize: "1.8vw", fontWeight: "900", color: "#444", marg
 const resListStyle = { display: "flex", gap: "10px", overflowX: "auto" };
 const resCardStyle = { backgroundColor: "#f0f2f5", color: "#1a1a1a", padding: "12px", borderRadius: "10px", fontSize: "1.6vw", minWidth: "160px", border: "1px solid #ccc", fontWeight: "bold" };
 const gridStyle = { display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "flex-start" };
-const pBtnStyle = (isSelected) => ({ 
-  padding: "15px 10px", 
-  fontSize: "2.2vw", 
-  borderRadius: "12px", 
-  border: isSelected ? "4px solid #1D3557" : "1px solid #bbb", 
-  backgroundColor: isSelected ? "#1D3557" : "#fdfdfd", 
-  color: isSelected ? "#ffffff" : "#1a1a1a", 
-  fontWeight: "900", 
-  flex: "1 1 18%", 
-  minWidth: "140px",
-  transition: "all 0.1s ease" 
-});
+const pBtnStyle = (s) => ({ padding: "15px 10px", fontSize: "2.2vw", borderRadius: "12px", border: s ? "4px solid #1D3557" : "1px solid #bbb", backgroundColor: s ? "#1D3557" : "#fdfdfd", color: s ? "#ffffff" : "#1a1a1a", fontWeight: "900", flex: "1 1 18%", minWidth: "140px" });
 const selectStyle = { padding: "12px 25px", fontSize: "2.5vw", borderRadius: "12px", border: "2px solid #ddd", fontWeight: "bold" };
 const inputStyle = { width: "90%", padding: "15px", fontSize: "2.5vw", borderRadius: "12px", border: "3px solid #2B9348", marginTop: "10px", textAlign: "center", fontWeight: "bold" };
 const actionBtnStyle = { flex: 1, padding: "20px", fontSize: "3.5vw", color: "white", border: "none", borderRadius: "20px", fontWeight: "900" };
