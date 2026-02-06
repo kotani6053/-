@@ -9,7 +9,7 @@ export default function TabletDisplay() {
   const [isEditing, setIsEditing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   
-  // ★ ここを「会議室」または「応接室」に書き換えてください
+  // 今回のターゲット：会議室
   const roomName = "会議室"; 
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
@@ -23,7 +23,6 @@ export default function TabletDisplay() {
     return () => clearInterval(timer);
   }, []);
 
-  // リアルタイム監視（指定した部屋名のみを抽出）
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -72,7 +71,7 @@ export default function TabletDisplay() {
     });
 
     if (isOverlapping) {
-      alert(`⚠️エラー：${roomName}は、この時間帯に既に予約が入っています。`);
+      alert(`⚠️エラー：この時間帯は既に予約が入っています。`);
       return;
     }
 
@@ -97,7 +96,7 @@ export default function TabletDisplay() {
   };
 
   const handleRelease = async () => {
-    if (data.id && window.confirm(`${roomName}の会議を終了し、空室に戻しますか？`)) {
+    if (data.id && window.confirm("会議を終了し、空室に戻しますか？")) {
       await deleteDoc(doc(db, "reservations", data.id));
     }
   };
@@ -215,7 +214,6 @@ export default function TabletDisplay() {
   );
 }
 
-// スタイル定義は前回と同様
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.1)", padding: "40px", borderRadius: "30px", margin: "20px 0" };
 const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "10px 40px", borderRadius: "50px", fontSize: "4vw", fontWeight: "900" };
