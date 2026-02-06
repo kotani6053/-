@@ -11,21 +11,17 @@ export default function TabletDisplay() {
   
   const roomName = "3階応接室"; 
 
-  // プリセット項目
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
   const userPresets = ["役員", "部長", "次長", "課長", "係長", "主任", "その他"];
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
-  // 初期値を 08:00 に設定
   const [form, setForm] = useState({ dept: "", user: "", purpose: "", clientName: "", startTime: "08:00", endTime: "09:00" });
 
-  // 1. 時計の更新
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // 2. Firebaseのリアルタイム監視
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -54,11 +50,25 @@ export default function TabletDisplay() {
     return () => unsubscribe();
   }, [roomName]);
 
-  // 3. 予約登録処理
+  // 予約登録処理（重複チェック付き）
   const handleReserve = async () => {
     if (!form.dept || !form.user || !form.purpose) return alert("項目をすべて選択してください");
+    if (form.startTime >= form.endTime) return alert("終了時間は開始時間より後に設定してください");
+
+    // 重複チェックのロジック
+    const isOverlapping = reservations.some(res => {
+      // (既存の開始 <= 入力の終了) かつ (入力の開始 <= 既存の終了) の場合、時間は重なっている
+      return res.startTime < form.endTime && form.startTime < res.endTime;
+    });
+
+    if (isOverlapping) {
+      alert("エラー：選択された時間帯は既に他の予約が入っています。");
+      return;
+    }
+
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+    
     try {
       await addDoc(collection(db, "reservations"), {
         room: roomName, department: form.dept, name: form.user, purpose: form.purpose, clientName: form.clientName, startTime: form.startTime, endTime: form.endTime, date: dateStr, createdAt: new Date()
@@ -68,20 +78,16 @@ export default function TabletDisplay() {
     } catch (e) { alert("予約に失敗しました"); }
   };
 
-  // 4. 利用終了処理
   const handleRelease = async () => {
     if (data.id && window.confirm("会議を終了し、空室に戻しますか？")) {
       await deleteDoc(doc(db, "reservations", data.id));
     }
   };
 
-  // 時間選択肢の生成 (8:00 - 18:00)
   const timeOptions = [];
   for (let h = 8; h <= 18; h++) {
     timeOptions.push(`${h.toString().padStart(2, '0')}:00`);
-    if (h !== 18) { // 18:30は不要な場合
-      timeOptions.push(`${h.toString().padStart(2, '0')}:30`);
-    }
+    if (h !== 18) timeOptions.push(`${h.toString().padStart(2, '0')}:30`);
   }
 
   const Clock = () => (
@@ -100,12 +106,10 @@ export default function TabletDisplay() {
           <div style={{ fontSize: "4vw", margin: "10px 0" }}>{data.dept}：{data.user}</div>
           <div style={timeBadgeStyle}>{data.startTime} 〜 {data.endTime}</div>
         </div>
-
         <div style={{ display: "flex", flexDirection: "column", gap: "2vh", marginTop: "2vh" }}>
           <button onClick={handleRelease} style={finishBtnStyle}>会議を終了する</button>
           <button onClick={() => setIsEditing(true)} style={subBtnStyle}>本日の予約状況を確認</button>
         </div>
-
         {isEditing && (
           <div style={modalOverlayStyle}>
             <div style={modalContentStyle}>
@@ -133,7 +137,6 @@ export default function TabletDisplay() {
       <div style={{ fontSize: "20vw", fontWeight: "900" }}>空室</div>
       <div style={{ fontSize: "4vw", marginBottom: "4vh" }}>{roomName}</div>
       <button onClick={() => setIsEditing(true)} style={startBtnStyle}>予約状況 / 今すぐ利用</button>
-
       {isEditing && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
@@ -145,7 +148,6 @@ export default function TabletDisplay() {
                 )) : <span style={{ color: "#999", padding: "10px", fontSize: "1.5vw" }}>本日の予定はありません</span>}
               </div>
             </div>
-
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", flex: 1, overflowY: "auto", paddingRight: "5px" }}>
               <div style={sectionBox}>
                 <div style={sectionLabel}>1. 利用部署</div>
@@ -153,14 +155,12 @@ export default function TabletDisplay() {
                   {deptPresets.map(d => <button key={d} onClick={() => setForm({...form, dept: d})} style={pBtnStyle(form.dept === d)}>{d}</button>)}
                 </div>
               </div>
-
               <div style={sectionBox}>
                 <div style={sectionLabel}>2. 利用者（役職）</div>
                 <div style={gridStyle}>
                   {userPresets.map(u => <button key={u} onClick={() => setForm({...form, user: u})} style={pBtnStyle(form.user === u)}>{u}</button>)}
                 </div>
               </div>
-
               <div style={sectionBox}>
                 <div style={sectionLabel}>3. 利用目的</div>
                 <div style={gridStyle}>
@@ -170,7 +170,6 @@ export default function TabletDisplay() {
                   <input placeholder="来客社名を入力" style={inputStyle} value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} />
                 )}
               </div>
-
               <div style={sectionBox}>
                 <div style={sectionLabel}>4. 利用時間（30分刻み）</div>
                 <div style={{ display: "flex", justifyContent: "center", gap: "20px", padding: "10px" }}>
@@ -184,7 +183,6 @@ export default function TabletDisplay() {
                 </div>
               </div>
             </div>
-            
             <div style={{ display: "flex", gap: "20px", paddingTop: "10px" }}>
               <button onClick={handleReserve} style={{ ...actionBtnStyle, backgroundColor: "#2B9348" }}>利用登録を確定する</button>
               <button onClick={() => setIsEditing(false)} style={{ ...actionBtnStyle, backgroundColor: "#666" }}>戻る</button>
@@ -196,7 +194,6 @@ export default function TabletDisplay() {
   );
 }
 
-// スタイルは変更なし
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.1)", padding: "40px", borderRadius: "30px", margin: "20px 0" };
 const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "10px 40px", borderRadius: "50px", fontSize: "4vw", fontWeight: "900" };
