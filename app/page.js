@@ -9,17 +9,8 @@ export default function TabletDisplay() {
   const [isEditing, setIsEditing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   
-  const [roomName, setRoomName] = useState("会議室"); // 基本は「会議室」にしておく
-
-useEffect(() => {
-  // ブラウザのURLバーにある「?room=〇〇」を読み取る
-  const params = new URLSearchParams(window.location.search);
-  const roomParam = params.get("room"); // 〇〇の部分を取り出す
-  
-  if (roomParam) {
-    setRoomName(roomParam); // もしURLに指定があれば、部屋名を上書きする
-  }
-}, []);
+  // 初期値は「会議室」。URLに ?room=xxx があればそちらを優先
+  const [roomName, setRoomName] = useState("会議室"); 
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
   const userPresets = ["役員", "部長", "次長", "課長", "係長", "主任", "その他"];
@@ -27,15 +18,29 @@ useEffect(() => {
   
   const [form, setForm] = useState({ dept: "", user: [], purpose: "", clientName: "", startTime: "08:00", endTime: "09:00" });
 
+  // 1. URLパラメータの読み取り
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get("room");
+    if (roomParam) {
+      setRoomName(roomParam);
+    }
+  }, []);
+
+  // 2. 30秒ごとに現在時刻を更新（これにより自動で空室判定が走り直す）
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30000); // 30秒ごとにチェック
     return () => clearInterval(timer);
   }, []);
 
+  // 3. リアルタイム監視と判定
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const now = new Date();
+      const now = currentTime; // 常に最新の時刻を使用
       const y = now.getFullYear();
       const m = (now.getMonth() + 1).toString().padStart(2, '0');
       const d = now.getDate().toString().padStart(2, '0');
@@ -49,6 +54,7 @@ useEffect(() => {
 
       setReservations(todayRes);
 
+      // 現在の時間で「使用中」の予約があるか探す
       const current = todayRes.find(res => res.startTime <= currentTimeStr && res.endTime >= currentTimeStr);
 
       if (current) {
@@ -58,7 +64,7 @@ useEffect(() => {
       }
     });
     return () => unsubscribe();
-  }, [roomName]);
+  }, [roomName, currentTime]); // roomName か currentTime が変わるたびに再判定
 
   const toggleUser = (u) => {
     setForm(prev => {
@@ -105,7 +111,7 @@ useEffect(() => {
   };
 
   const handleRelease = async () => {
-    if (data.id && window.confirm("会議を終了し、空室に戻しますか？")) {
+    if (data.id && window.confirm(`${roomName}を空室に戻しますか？`)) {
       await deleteDoc(doc(db, "reservations", data.id));
     }
   };
@@ -134,8 +140,8 @@ useEffect(() => {
           <div style={timeBadgeStyle}>{data.startTime} 〜 {data.endTime}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "2vh", marginTop: "2vh" }}>
-          <button onClick={handleRelease} style={finishBtnStyle}>会議を終了する</button>
-          <button onClick={() => setIsEditing(true)} style={subBtnStyle}>本日の予約状況を確認</button>
+          <button onClick={handleRelease} style={finishBtnStyle}>今すぐ終了する</button>
+          <button onClick={() => setIsEditing(true)} style={subBtnStyle}>予約状況を確認</button>
         </div>
         {isEditing && (
           <div style={modalOverlayStyle}>
