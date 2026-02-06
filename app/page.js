@@ -15,7 +15,8 @@ export default function TabletDisplay() {
   const userPresets = ["役員", "部長", "次長", "課長", "係長", "主任", "その他"];
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
-  const [form, setForm] = useState({ dept: "", user: "", purpose: "", clientName: "", startTime: "08:00", endTime: "09:00" });
+  // userを配列に変更
+  const [form, setForm] = useState({ dept: "", user: [], purpose: "", clientName: "", startTime: "08:00", endTime: "09:00" });
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -35,7 +36,7 @@ export default function TabletDisplay() {
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const todayRes = allRes
         .filter(res => res.date === currentDateStr)
-        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+        .sort((a, b) => a.startTime.slice(0, 5).localeCompare(b.startTime.slice(0, 5)));
 
       setReservations(todayRes);
 
@@ -50,20 +51,31 @@ export default function TabletDisplay() {
     return () => unsubscribe();
   }, [roomName]);
 
-  // 予約登録処理（重複ガード強化版）
+  // 役職ボタンのトグル処理
+  const toggleUser = (u) => {
+    setForm(prev => {
+      const currentUsers = prev.user;
+      if (currentUsers.includes(u)) {
+        // すでに選択されていれば削除（キャンセル）
+        return { ...prev, user: currentUsers.filter(item => item !== u) };
+      } else {
+        // 選択されていなければ追加
+        return { ...prev, user: [...currentUsers, u] };
+      }
+    });
+  };
+
   const handleReserve = async () => {
-    if (!form.dept || !form.user || !form.purpose) return alert("項目をすべて選択してください");
+    if (!form.dept || form.user.length === 0 || !form.purpose) return alert("項目をすべて選択してください");
     if (form.startTime >= form.endTime) return alert("終了時間は開始時間より後に設定してください");
 
-    // 重複チェック：最新の同期データ(reservations)を全件スキャン
     const isOverlapping = reservations.some(res => {
-      // 判定式：(既存の開始 < 入力の終了) かつ (入力の開始 < 既存の終了)
       return res.startTime < form.endTime && form.startTime < res.endTime;
     });
 
     if (isOverlapping) {
-      alert("⚠️エラー：この時間帯は既に他の予約が入っています。最新の予約状況を確認してください。");
-      return; // ここで処理を中断
+      alert("⚠️エラー：この時間帯は既に他の予約が入っています。");
+      return;
     }
 
     const now = new Date();
@@ -71,13 +83,19 @@ export default function TabletDisplay() {
     
     try {
       await addDoc(collection(db, "reservations"), {
-        room: roomName, department: form.dept, name: form.user, purpose: form.purpose, clientName: form.clientName, startTime: form.startTime, endTime: form.endTime, date: dateStr, createdAt: new Date()
+        room: roomName, 
+        department: form.dept, 
+        name: form.user.join("、"), // 配列を「、」で繋いで保存
+        purpose: form.purpose, 
+        clientName: form.clientName, 
+        startTime: form.startTime, 
+        endTime: form.endTime, 
+        date: dateStr, 
+        createdAt: new Date()
       });
       setIsEditing(false);
-      setForm({ ...form, clientName: "" });
-    } catch (e) { 
-      alert("予約の保存に失敗しました。"); 
-    }
+      setForm({ ...form, user: [], clientName: "" }); // リセット
+    } catch (e) { alert("予約に失敗しました"); }
   };
 
   const handleRelease = async () => {
@@ -158,9 +176,17 @@ export default function TabletDisplay() {
                 </div>
               </div>
               <div style={sectionBox}>
-                <div style={sectionLabel}>2. 利用者（役職）</div>
+                <div style={sectionLabel}>2. 利用者（役職/複数可）</div>
                 <div style={gridStyle}>
-                  {userPresets.map(u => <button key={u} onClick={() => setForm({...form, user: u})} style={pBtnStyle(form.user === u)}>{u}</button>)}
+                  {userPresets.map(u => (
+                    <button 
+                      key={u} 
+                      onClick={() => toggleUser(u)} 
+                      style={pBtnStyle(form.user.includes(u))} // 配列に含まれていれば色付け
+                    >
+                      {u}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div style={sectionBox}>
@@ -173,7 +199,7 @@ export default function TabletDisplay() {
                 )}
               </div>
               <div style={sectionBox}>
-                <div style={sectionLabel}>4. 利用時間（30分刻み）</div>
+                <div style={sectionLabel}>4. 利用時間</div>
                 <div style={{ display: "flex", justifyContent: "center", gap: "20px", padding: "10px" }}>
                   <select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>
                     {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
@@ -196,6 +222,7 @@ export default function TabletDisplay() {
   );
 }
 
+// スタイルは変更なし
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.1)", padding: "40px", borderRadius: "30px", margin: "20px 0" };
 const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "10px 40px", borderRadius: "50px", fontSize: "4vw", fontWeight: "900" };
@@ -209,7 +236,18 @@ const sectionLabel = { fontSize: "1.8vw", fontWeight: "900", color: "#444", marg
 const resListStyle = { display: "flex", gap: "10px", overflowX: "auto" };
 const resCardStyle = { backgroundColor: "#f0f2f5", color: "#1a1a1a", padding: "12px", borderRadius: "10px", fontSize: "1.6vw", minWidth: "160px", border: "1px solid #ccc", fontWeight: "bold" };
 const gridStyle = { display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "flex-start" };
-const pBtnStyle = (s) => ({ padding: "15px 10px", fontSize: "2.2vw", borderRadius: "12px", border: s ? "4px solid #1D3557" : "1px solid #bbb", backgroundColor: s ? "#1D3557" : "#fdfdfd", color: s ? "#ffffff" : "#1a1a1a", fontWeight: "900", flex: "1 1 18%", minWidth: "140px" });
+const pBtnStyle = (isSelected) => ({ 
+  padding: "15px 10px", 
+  fontSize: "2.2vw", 
+  borderRadius: "12px", 
+  border: isSelected ? "4px solid #1D3557" : "1px solid #bbb", 
+  backgroundColor: isSelected ? "#1D3557" : "#fdfdfd", 
+  color: isSelected ? "#ffffff" : "#1a1a1a", 
+  fontWeight: "900", 
+  flex: "1 1 18%", 
+  minWidth: "140px",
+  transition: "all 0.1s ease" 
+});
 const selectStyle = { padding: "12px 25px", fontSize: "2.5vw", borderRadius: "12px", border: "2px solid #ddd", fontWeight: "bold" };
 const inputStyle = { width: "90%", padding: "15px", fontSize: "2.5vw", borderRadius: "12px", border: "3px solid #2B9348", marginTop: "10px", textAlign: "center", fontWeight: "bold" };
 const actionBtnStyle = { flex: 1, padding: "20px", fontSize: "3.5vw", color: "white", border: "none", borderRadius: "20px", fontWeight: "900" };
