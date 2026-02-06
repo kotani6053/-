@@ -9,8 +9,17 @@ export default function TabletDisplay() {
   const [isEditing, setIsEditing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   
-  // 今回のターゲット：会議室
-  const roomName = "会議室"; 
+  const [roomName, setRoomName] = useState("会議室"); // 基本は「会議室」にしておく
+
+useEffect(() => {
+  // ブラウザのURLバーにある「?room=〇〇」を読み取る
+  const params = new URLSearchParams(window.location.search);
+  const roomParam = params.get("room"); // 〇〇の部分を取り出す
+  
+  if (roomParam) {
+    setRoomName(roomParam); // もしURLに指定があれば、部屋名を上書きする
+  }
+}, []);
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
   const userPresets = ["役員", "部長", "次長", "課長", "係長", "主任", "その他"];
