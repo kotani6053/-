@@ -11,21 +11,25 @@ export default function TabletDisplay() {
   
   const roomName = "3階応接室"; 
 
+  // プリセット項目
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
   const userPresets = ["役員", "部長", "次長", "課長", "係長", "主任", "その他"];
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
   const [form, setForm] = useState({ dept: "", user: "", purpose: "", clientName: "", startTime: "09:00", endTime: "10:00" });
 
+  // 1. 時計の更新
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // 2. Firebaseのリアルタイム監視
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const now = new Date();
+      // 日付を YYYY-MM-DD 形式で作成
       const y = now.getFullYear();
       const m = (now.getMonth() + 1).toString().padStart(2, '0');
       const d = now.getDate().toString().padStart(2, '0');
@@ -33,11 +37,15 @@ export default function TabletDisplay() {
       const currentTimeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // 今日の予約を抽出し、時間順に並べる
       const todayRes = allRes
         .filter(res => res.date === currentDateStr)
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
       setReservations(todayRes);
+
+      // 「いま」の予約があるか判定
       const current = todayRes.find(res => res.startTime <= currentTimeStr && res.endTime >= currentTimeStr);
 
       if (current) {
@@ -49,6 +57,7 @@ export default function TabletDisplay() {
     return () => unsubscribe();
   }, [roomName]);
 
+  // 3. 予約登録処理
   const handleReserve = async () => {
     if (!form.dept || !form.user || !form.purpose) return alert("項目をすべて選択してください");
     const now = new Date();
@@ -58,21 +67,25 @@ export default function TabletDisplay() {
         room: roomName, department: form.dept, name: form.user, purpose: form.purpose, clientName: form.clientName, startTime: form.startTime, endTime: form.endTime, date: dateStr, createdAt: new Date()
       });
       setIsEditing(false);
-    } catch (e) { alert("予約失敗"); }
+      setForm({ ...form, clientName: "" }); // 登録後に社名をリセット
+    } catch (e) { alert("予約に失敗しました"); }
   };
 
+  // 4. 利用終了処理
   const handleRelease = async () => {
     if (data.id && window.confirm("会議を終了し、空室に戻しますか？")) {
       await deleteDoc(doc(db, "reservations", data.id));
     }
   };
 
+  // 共通時計コンポーネント
   const Clock = () => (
     <div style={{ position: "absolute", top: "20px", right: "30px", fontSize: "3vw", fontWeight: "bold", color: "rgba(255,255,255,0.9)" }}>
       {currentTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
     </div>
   );
 
+  // --- 使用中画面 ---
   if (data.occupied) {
     return (
       <div style={{ ...screenStyle, backgroundColor: "#D90429" }}>
@@ -83,11 +96,34 @@ export default function TabletDisplay() {
           <div style={{ fontSize: "4vw", margin: "10px 0" }}>{data.dept}：{data.user}</div>
           <div style={timeBadgeStyle}>{data.startTime} 〜 {data.endTime}</div>
         </div>
-        <button onClick={handleRelease} style={finishBtnStyle}>会議を終了する</button>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "2vh", marginTop: "2vh" }}>
+          <button onClick={handleRelease} style={finishBtnStyle}>会議を終了する</button>
+          <button onClick={() => setIsEditing(true)} style={subBtnStyle}>本日の予約状況を確認</button>
+        </div>
+
+        {isEditing && (
+          <div style={modalOverlayStyle}>
+            <div style={modalContentStyle}>
+              <div style={sectionBox}>
+                <div style={sectionLabel}>本日の予約状況</div>
+                <div style={resListStyle}>
+                  {reservations.length > 0 ? reservations.map(res => (
+                    <div key={res.id} style={resCardStyle}><b>{res.startTime}-{res.endTime}</b><br/>{res.name}</div>
+                  )) : <span style={{ color: "#999", padding: "10px", fontSize: "1.5vw" }}>本日の予定はありません</span>}
+                </div>
+              </div>
+              <div style={{ textAlign: "center", marginTop: "auto" }}>
+                <button onClick={() => setIsEditing(false)} style={{ ...actionBtnStyle, backgroundColor: "#666", width: "100%" }}>閉じる</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
+  // --- 空室画面 ---
   return (
     <div style={{ ...screenStyle, backgroundColor: "#2B9348" }}>
       <Clock />
@@ -165,12 +201,13 @@ export default function TabletDisplay() {
   );
 }
 
-// --- スタイル定義（フォント視認性を強化） ---
-const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center" };
+// --- スタイル定義 ---
+const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.1)", padding: "40px", borderRadius: "30px", margin: "20px 0" };
 const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "10px 40px", borderRadius: "50px", fontSize: "4vw", fontWeight: "900" };
-const finishBtnStyle = { width: "60vw", height: "15vh", backgroundColor: "white", color: "#D90429", fontSize: "6vw", fontWeight: "900", borderRadius: "30px", border: "none", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" };
-const startBtnStyle = { padding: "3vh 10vw", fontSize: "6vw", borderRadius: "100px", border: "none", backgroundColor: "white", color: "#2B9348", fontWeight: "900" };
+const finishBtnStyle = { width: "60vw", height: "12vh", backgroundColor: "white", color: "#D90429", fontSize: "5vw", fontWeight: "900", borderRadius: "25px", border: "none", boxShadow: "0 10px 30px rgba(0,0,0,0.3)", cursor: "pointer" };
+const subBtnStyle = { width: "60vw", height: "8vh", backgroundColor: "rgba(255,255,255,0.2)", color: "white", fontSize: "3.5vw", fontWeight: "900", borderRadius: "20px", border: "2px solid white", cursor: "pointer" };
+const startBtnStyle = { padding: "3vh 10vw", fontSize: "6vw", borderRadius: "100px", border: "none", backgroundColor: "white", color: "#2B9348", fontWeight: "900", cursor: "pointer", boxShadow: "0 10px 30px rgba(0,0,0,0.2)" };
 
 const modalOverlayStyle = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.9)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
 const modalContentStyle = { backgroundColor: "#eee", padding: "25px", borderRadius: "30px", width: "95%", height: "95%", display: "flex", flexDirection: "column", gap: "10px" };
@@ -182,22 +219,8 @@ const resListStyle = { display: "flex", gap: "10px", overflowX: "auto" };
 const resCardStyle = { backgroundColor: "#f0f2f5", color: "#1a1a1a", padding: "12px", borderRadius: "10px", fontSize: "1.6vw", minWidth: "160px", border: "1px solid #ccc", fontWeight: "bold" };
 
 const gridStyle = { display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "flex-start" };
+const pBtnStyle = (s) => ({ padding: "15px 10px", fontSize: "2.2vw", borderRadius: "12px", border: s ? "4px solid #1D3557" : "1px solid #bbb", backgroundColor: s ? "#1D3557" : "#fdfdfd", color: s ? "#ffffff" : "#1a1a1a", fontWeight: "900", flex: "1 1 18%", minWidth: "140px" });
 
-// ボタン内の文字を大きく、太く（pBtnStyle）
-const pBtnStyle = (s) => ({ 
-  padding: "15px 10px", 
-  fontSize: "2.2vw", // 文字を大きく
-  borderRadius: "12px", 
-  border: s ? "4px solid #1D3557" : "1px solid #bbb", 
-  backgroundColor: s ? "#1D3557" : "#fdfdfd", 
-  color: s ? "#ffffff" : "#1a1a1a", 
-  fontWeight: "900", // 最も太く
-  flex: "1 1 18%", 
-  minWidth: "140px",
-  boxShadow: s ? "inset 0 2px 4px rgba(0,0,0,0.3)" : "0 2px 4px rgba(0,0,0,0.05)",
-  transition: "all 0.1s ease"
-});
-
-const selectStyle = { padding: "12px 25px", fontSize: "2.5vw", borderRadius: "12px", border: "2px solid #ddd", fontWeight: "bold", backgroundColor: "white" };
+const selectStyle = { padding: "12px 25px", fontSize: "2.5vw", borderRadius: "12px", border: "2px solid #ddd", fontWeight: "bold" };
 const inputStyle = { width: "90%", padding: "15px", fontSize: "2.5vw", borderRadius: "12px", border: "3px solid #2B9348", marginTop: "10px", textAlign: "center", fontWeight: "bold" };
-const actionBtnStyle = { flex: 1, padding: "20px", fontSize: "3.5vw", color: "white", border: "none", borderRadius: "20px", fontWeight: "900", letterSpacing: "2px" };
+const actionBtnStyle = { flex: 1, padding: "20px", fontSize: "3.5vw", color: "white", border: "none", borderRadius: "20px", fontWeight: "900" };
