@@ -50,20 +50,20 @@ export default function TabletDisplay() {
     return () => unsubscribe();
   }, [roomName]);
 
-  // 予約登録処理（重複チェック付き）
+  // 予約登録処理（重複ガード強化版）
   const handleReserve = async () => {
     if (!form.dept || !form.user || !form.purpose) return alert("項目をすべて選択してください");
     if (form.startTime >= form.endTime) return alert("終了時間は開始時間より後に設定してください");
 
-    // 重複チェックのロジック
+    // 重複チェック：最新の同期データ(reservations)を全件スキャン
     const isOverlapping = reservations.some(res => {
-      // (既存の開始 <= 入力の終了) かつ (入力の開始 <= 既存の終了) の場合、時間は重なっている
+      // 判定式：(既存の開始 < 入力の終了) かつ (入力の開始 < 既存の終了)
       return res.startTime < form.endTime && form.startTime < res.endTime;
     });
 
     if (isOverlapping) {
-      alert("エラー：選択された時間帯は既に他の予約が入っています。");
-      return;
+      alert("⚠️エラー：この時間帯は既に他の予約が入っています。最新の予約状況を確認してください。");
+      return; // ここで処理を中断
     }
 
     const now = new Date();
@@ -75,7 +75,9 @@ export default function TabletDisplay() {
       });
       setIsEditing(false);
       setForm({ ...form, clientName: "" });
-    } catch (e) { alert("予約に失敗しました"); }
+    } catch (e) { 
+      alert("予約の保存に失敗しました。"); 
+    }
   };
 
   const handleRelease = async () => {
