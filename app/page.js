@@ -16,8 +16,8 @@ export default function TabletDisplay() {
   const userPresets = ["役員", "部長", "次長", "課長", "係長", "主任", "その他"];
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
-  // 初期値をキリの良い時間に設定
-  const [form, setForm] = useState({ dept: "", user: "", purpose: "", clientName: "", startTime: "09:00", endTime: "10:00" });
+  // 初期値を 08:00 に設定
+  const [form, setForm] = useState({ dept: "", user: "", purpose: "", clientName: "", startTime: "08:00", endTime: "09:00" });
 
   // 1. 時計の更新
   useEffect(() => {
@@ -75,13 +75,21 @@ export default function TabletDisplay() {
     }
   };
 
+  // 時間選択肢の生成 (8:00 - 18:00)
+  const timeOptions = [];
+  for (let h = 8; h <= 18; h++) {
+    timeOptions.push(`${h.toString().padStart(2, '0')}:00`);
+    if (h !== 18) { // 18:30は不要な場合
+      timeOptions.push(`${h.toString().padStart(2, '0')}:30`);
+    }
+  }
+
   const Clock = () => (
     <div style={{ position: "absolute", top: "20px", right: "30px", fontSize: "3vw", fontWeight: "bold", color: "rgba(255,255,255,0.9)" }}>
       {currentTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
     </div>
   );
 
-  // --- 使用中画面 ---
   if (data.occupied) {
     return (
       <div style={{ ...screenStyle, backgroundColor: "#D90429" }}>
@@ -119,7 +127,6 @@ export default function TabletDisplay() {
     );
   }
 
-  // --- 空室画面 ---
   return (
     <div style={{ ...screenStyle, backgroundColor: "#2B9348" }}>
       <Clock />
@@ -168,20 +175,11 @@ export default function TabletDisplay() {
                 <div style={sectionLabel}>4. 利用時間（30分刻み）</div>
                 <div style={{ display: "flex", justifyContent: "center", gap: "20px", padding: "10px" }}>
                   <select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>
-                    {/* 30分刻みに変更（24時間 × 2個） */}
-                    {Array.from({length: 24*2}, (_, i) => {
-                      const h = Math.floor(i/2).toString().padStart(2,'0');
-                      const m = (i%2*30).toString().padStart(2,'0');
-                      return <option key={i} value={`${h}:${m}`}>{h}:{m}</option>;
-                    })}
+                    {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                   <span style={{ alignSelf: "center", fontSize: "3vw", fontWeight: "bold", color: "#333" }}>〜</span>
                   <select style={selectStyle} value={form.endTime} onChange={e => setForm({...form, endTime: e.target.value})}>
-                    {Array.from({length: 24*2}, (_, i) => {
-                      const h = Math.floor(i/2).toString().padStart(2,'0');
-                      const m = (i%2*30).toString().padStart(2,'0');
-                      return <option key={i} value={`${h}:${m}`}>{h}:{m}</option>;
-                    })}
+                    {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
