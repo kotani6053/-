@@ -9,7 +9,7 @@ export default function TabletDisplay() {
   const [isEditing, setIsEditing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   
-  // 初期値は「会議室」。URLに ?room=xxx があればそちらを優先
+  // URLパラメータ（?room=xxx）から部屋名を取得、なければ「会議室」
   const [roomName, setRoomName] = useState("会議室"); 
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
@@ -27,20 +27,20 @@ export default function TabletDisplay() {
     }
   }, []);
 
-  // 2. 30秒ごとに現在時刻を更新（これにより自動で空室判定が走り直す）
+  // 2. 30秒ごとに現在時刻を更新
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 30000); // 30秒ごとにチェック
+    }, 30000); 
     return () => clearInterval(timer);
   }, []);
 
-  // 3. リアルタイム監視と判定
+  // 3. リアルタイム監視・お掃除・判定
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const now = currentTime; // 常に最新の時刻を使用
+      const now = currentTime;
       const y = now.getFullYear();
       const m = (now.getMonth() + 1).toString().padStart(2, '0');
       const d = now.getDate().toString().padStart(2, '0');
@@ -48,14 +48,31 @@ export default function TabletDisplay() {
       const currentTimeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const todayRes = allRes
-        .filter(res => res.date === currentDateStr)
+      
+      // 本日の予約のみ抽出
+      const todayRes = allRes.filter(res => res.date === currentDateStr);
+
+      // --- 【お掃除機能】終了時間を過ぎたデータを自動削除 ---
+      todayRes.forEach(async (res) => {
+        if (res.endTime < currentTimeStr) {
+          try {
+            await deleteDoc(doc(db, "reservations", res.id));
+            console.log(`削除完了: ${res.startTime}-${res.endTime} の予約`);
+          } catch (e) {
+            console.error("自動削除失敗:", e);
+          }
+        }
+      });
+
+      // 表示用の有効な予約リストを更新（削除分を除外）
+      const activeRes = todayRes
+        .filter(res => res.endTime >= currentTimeStr)
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-      setReservations(todayRes);
+      setReservations(activeRes);
 
-      // 現在の時間で「使用中」の予約があるか探す
-      const current = todayRes.find(res => res.startTime <= currentTimeStr && res.endTime >= currentTimeStr);
+      // 現在使用中の予約があるか判定
+      const current = activeRes.find(res => res.startTime <= currentTimeStr && res.endTime >= currentTimeStr);
 
       if (current) {
         setData({ id: current.id, occupied: true, dept: current.department, user: current.name, purpose: current.purpose, clientName: current.clientName || "", startTime: current.startTime, endTime: current.endTime });
@@ -64,8 +81,9 @@ export default function TabletDisplay() {
       }
     });
     return () => unsubscribe();
-  }, [roomName, currentTime]); // roomName か currentTime が変わるたびに再判定
+  }, [roomName, currentTime]);
 
+  // 利用者選択トグル
   const toggleUser = (u) => {
     setForm(prev => {
       const currentUsers = prev.user;
@@ -77,6 +95,7 @@ export default function TabletDisplay() {
     });
   };
 
+  // 予約実行
   const handleReserve = async () => {
     if (!form.dept || form.user.length === 0 || !form.purpose) return alert("項目をすべて選択してください");
     if (form.startTime >= form.endTime) return alert("終了時間は開始時間より後に設定してください");
@@ -110,12 +129,14 @@ export default function TabletDisplay() {
     } catch (e) { alert("予約に失敗しました"); }
   };
 
+  // 手動終了
   const handleRelease = async () => {
     if (data.id && window.confirm(`${roomName}を空室に戻しますか？`)) {
       await deleteDoc(doc(db, "reservations", data.id));
     }
   };
 
+  // 時間選択肢
   const timeOptions = [];
   for (let h = 8; h <= 18; h++) {
     timeOptions.push(`${h.toString().padStart(2, '0')}:00`);
@@ -128,6 +149,7 @@ export default function TabletDisplay() {
     </div>
   );
 
+  // --- 画面表示（使用中） ---
   if (data.occupied) {
     return (
       <div style={{ ...screenStyle, backgroundColor: "#D90429" }}>
@@ -164,6 +186,7 @@ export default function TabletDisplay() {
     );
   }
 
+  // --- 画面表示（空室） ---
   return (
     <div style={{ ...screenStyle, backgroundColor: "#2B9348" }}>
       <Clock />
@@ -182,12 +205,14 @@ export default function TabletDisplay() {
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", flex: 1, overflowY: "auto", paddingRight: "5px" }}>
+              {/* 利用部署選択 */}
               <div style={sectionBox}>
                 <div style={sectionLabel}>1. 利用部署</div>
                 <div style={gridStyle}>
                   {deptPresets.map(d => <button key={d} onClick={() => setForm({...form, dept: d})} style={pBtnStyle(form.dept === d)}>{d}</button>)}
                 </div>
               </div>
+              {/* 利用者選択 */}
               <div style={sectionBox}>
                 <div style={sectionLabel}>2. 利用者（役職/複数可）</div>
                 <div style={gridStyle}>
@@ -196,6 +221,7 @@ export default function TabletDisplay() {
                   ))}
                 </div>
               </div>
+              {/* 目的選択 */}
               <div style={sectionBox}>
                 <div style={sectionLabel}>3. 利用目的</div>
                 <div style={gridStyle}>
@@ -205,6 +231,7 @@ export default function TabletDisplay() {
                   <input placeholder="来客社名を入力" style={inputStyle} value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} />
                 )}
               </div>
+              {/* 時間選択 */}
               <div style={sectionBox}>
                 <div style={sectionLabel}>4. 利用時間</div>
                 <div style={{ display: "flex", justifyContent: "center", gap: "20px", padding: "10px" }}>
@@ -229,6 +256,7 @@ export default function TabletDisplay() {
   );
 }
 
+// スタイル定義
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.1)", padding: "40px", borderRadius: "30px", margin: "20px 0" };
 const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "10px 40px", borderRadius: "50px", fontSize: "4vw", fontWeight: "900" };
