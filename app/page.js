@@ -11,25 +11,25 @@ export default function TabletDisplay() {
   const [roomName, setRoomName] = useState("会議室"); 
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
-  
-  // 利用者欄を修正：役員を削除し、4つの役職を追加
   const userPresets = ["社長", "専務", "常務", "取締役", "部長", "次長", "課長", "係長", "主任", "その他"];
-  
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
   const [form, setForm] = useState({ dept: "", user: [], purpose: "", clientName: "", startTime: "08:00", endTime: "09:00" });
 
+  // 1. URLパラメータの読み取り
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const roomParam = params.get("room");
     if (roomParam) setRoomName(roomParam);
   }, []);
 
+  // 2. 30秒ごとに現在時刻を更新
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 30000); 
     return () => clearInterval(timer);
   }, []);
 
+  // 3. リアルタイム監視
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -43,6 +43,7 @@ export default function TabletDisplay() {
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const todayRes = allRes.filter(res => res.date === currentDateStr);
 
+      // 自動削除
       todayRes.forEach(async (res) => {
         if (res.endTime < currentTimeStr) {
           try { await deleteDoc(doc(db, "reservations", res.id)); } catch (e) { console.error(e); }
@@ -108,7 +109,8 @@ export default function TabletDisplay() {
     </div>
   );
 
-  const ReservationForm = () => (
+  // 入力フォームの中身を関数化せず、直接書くためのパーツ（UIの再利用用）
+  const renderInputForm = () => (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5vh", flex: 1, overflowY: "auto" }}>
       <div style={sectionBox}>
         <div style={sectionLabel}>1. 利用部署</div>
@@ -130,7 +132,13 @@ export default function TabletDisplay() {
           {purposePresets.map(p => <button key={p} onClick={() => setForm({...form, purpose: p})} style={pBtnStyle(form.purpose === p)}>{p}</button>)}
         </div>
         {form.purpose === "来客" && (
-          <input placeholder="来客社名を入力" style={inputStyle} value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} />
+          <input 
+            key="input-client-name"
+            placeholder="来客社名を入力" 
+            style={inputStyle} 
+            value={form.clientName} 
+            onChange={e => setForm({...form, clientName: e.target.value})} 
+          />
         )}
       </div>
       <div style={sectionBox}>
@@ -148,6 +156,7 @@ export default function TabletDisplay() {
     </div>
   );
 
+  // --- 画面表示（使用中） ---
   if (data.occupied) {
     return (
       <div style={{ ...screenStyle, backgroundColor: "#D90429" }}>
@@ -182,7 +191,7 @@ export default function TabletDisplay() {
                   )) : <span style={{ color: "#999", padding: "10px", fontSize: "2vw" }}>本日の予定はありません</span>}
                 </div>
               </div>
-              <ReservationForm />
+              {renderInputForm()}
               <div style={{ display: "flex", gap: "2vw", paddingTop: "1vh" }}>
                 <button onClick={handleReserve} style={{ ...actionBtnStyle, backgroundColor: "#2B9348" }}>登録確定</button>
                 <button onClick={() => setIsEditing(false)} style={{ ...actionBtnStyle, backgroundColor: "#666" }}>戻る</button>
@@ -194,6 +203,7 @@ export default function TabletDisplay() {
     );
   }
 
+  // --- 画面表示（空室） ---
   return (
     <div style={{ ...screenStyle, backgroundColor: "#2B9348" }}>
       <Clock />
@@ -212,7 +222,7 @@ export default function TabletDisplay() {
                 )) : <span style={{ color: "#999", padding: "10px", fontSize: "2vw" }}>本日の予定はありません</span>}
               </div>
             </div>
-            <ReservationForm />
+            {renderInputForm()}
             <div style={{ display: "flex", gap: "2vw", paddingTop: "1vh" }}>
               <button onClick={handleReserve} style={{ ...actionBtnStyle, backgroundColor: "#2B9348" }}>登録確定</button>
               <button onClick={() => setIsEditing(false)} style={{ ...actionBtnStyle, backgroundColor: "#666" }}>戻る</button>
