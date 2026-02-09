@@ -11,7 +11,10 @@ export default function TabletDisplay() {
   const [roomName, setRoomName] = useState("会議室"); 
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
-  const userPresets = ["役員", "部長", "次長", "課長", "係長", "主任", "その他"];
+  
+  // 利用者欄を修正：役員を削除し、4つの役職を追加
+  const userPresets = ["社長", "専務", "常務", "取締役", "部長", "次長", "課長", "係長", "主任", "その他"];
+  
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
   const [form, setForm] = useState({ dept: "", user: [], purpose: "", clientName: "", startTime: "08:00", endTime: "09:00" });
@@ -105,7 +108,6 @@ export default function TabletDisplay() {
     </div>
   );
 
-  // --- 入力フォーム用共通コンポーネント ---
   const ReservationForm = () => (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5vh", flex: 1, overflowY: "auto" }}>
       <div style={sectionBox}>
@@ -115,7 +117,7 @@ export default function TabletDisplay() {
         </div>
       </div>
       <div style={sectionBox}>
-        <div style={sectionLabel}>2. 利用者</div>
+        <div style={sectionLabel}>2. 利用者（役職）</div>
         <div style={gridStyle}>
           {userPresets.map(u => (
             <button key={u} onClick={() => toggleUser(u)} style={pBtnStyle(form.user.includes(u))}>{u}</button>
@@ -146,7 +148,6 @@ export default function TabletDisplay() {
     </div>
   );
 
-  // --- 画面表示（使用中） ---
   if (data.occupied) {
     return (
       <div style={{ ...screenStyle, backgroundColor: "#D90429" }}>
@@ -193,7 +194,6 @@ export default function TabletDisplay() {
     );
   }
 
-  // --- 画面表示（空室） ---
   return (
     <div style={{ ...screenStyle, backgroundColor: "#2B9348" }}>
       <Clock />
