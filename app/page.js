@@ -8,8 +8,6 @@ export default function TabletDisplay() {
   const [reservations, setReservations] = useState([]); 
   const [isEditing, setIsEditing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  
-  // URLパラメータ（?room=xxx）から部屋名を取得、なければ「会議室」
   const [roomName, setRoomName] = useState("会議室"); 
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
@@ -18,27 +16,19 @@ export default function TabletDisplay() {
   
   const [form, setForm] = useState({ dept: "", user: [], purpose: "", clientName: "", startTime: "08:00", endTime: "09:00" });
 
-  // 1. URLパラメータの読み取り
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const roomParam = params.get("room");
-    if (roomParam) {
-      setRoomName(roomParam);
-    }
+    if (roomParam) setRoomName(roomParam);
   }, []);
 
-  // 2. 30秒ごとに現在時刻を更新
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 30000); 
+    const timer = setInterval(() => setCurrentTime(new Date()), 30000); 
     return () => clearInterval(timer);
   }, []);
 
-  // 3. リアルタイム監視・お掃除・判定
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
-    
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const now = currentTime;
       const y = now.getFullYear();
@@ -48,30 +38,19 @@ export default function TabletDisplay() {
       const currentTimeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // 本日の予約のみ抽出
       const todayRes = allRes.filter(res => res.date === currentDateStr);
 
-      // --- 【お掃除機能】終了時間を過ぎたデータを自動削除 ---
       todayRes.forEach(async (res) => {
         if (res.endTime < currentTimeStr) {
-          try {
-            await deleteDoc(doc(db, "reservations", res.id));
-            console.log(`削除完了: ${res.startTime}-${res.endTime} の予約`);
-          } catch (e) {
-            console.error("自動削除失敗:", e);
-          }
+          try { await deleteDoc(doc(db, "reservations", res.id)); } catch (e) { console.error(e); }
         }
       });
 
-      // 表示用の有効な予約リストを更新（削除分を除外）
       const activeRes = todayRes
         .filter(res => res.endTime >= currentTimeStr)
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
       setReservations(activeRes);
-
-      // 現在使用中の予約があるか判定
       const current = activeRes.find(res => res.startTime <= currentTimeStr && res.endTime >= currentTimeStr);
 
       if (current) {
@@ -83,60 +62,35 @@ export default function TabletDisplay() {
     return () => unsubscribe();
   }, [roomName, currentTime]);
 
-  // 利用者選択トグル
   const toggleUser = (u) => {
     setForm(prev => {
       const currentUsers = prev.user;
-      if (currentUsers.includes(u)) {
-        return { ...prev, user: currentUsers.filter(item => item !== u) };
-      } else {
-        return { ...prev, user: [...currentUsers, u] };
-      }
+      if (currentUsers.includes(u)) return { ...prev, user: currentUsers.filter(item => item !== u) };
+      return { ...prev, user: [...currentUsers, u] };
     });
   };
 
-  // 予約実行
   const handleReserve = async () => {
     if (!form.dept || form.user.length === 0 || !form.purpose) return alert("項目をすべて選択してください");
     if (form.startTime >= form.endTime) return alert("終了時間は開始時間より後に設定してください");
-
-    const isOverlapping = reservations.some(res => {
-      return res.startTime < form.endTime && form.startTime < res.endTime;
-    });
-
-    if (isOverlapping) {
-      alert(`⚠️エラー：この時間帯は既に予約が入っています。`);
-      return;
-    }
+    if (reservations.some(res => res.startTime < form.endTime && form.startTime < res.endTime)) return alert("既に予約が入っています");
 
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
     
     try {
       await addDoc(collection(db, "reservations"), {
-        room: roomName, 
-        department: form.dept, 
-        name: form.user.join("、"), 
-        purpose: form.purpose, 
-        clientName: form.clientName, 
-        startTime: form.startTime, 
-        endTime: form.endTime, 
-        date: dateStr, 
-        createdAt: new Date()
+        room: roomName, department: form.dept, name: form.user.join("、"), purpose: form.purpose, clientName: form.clientName, startTime: form.startTime, endTime: form.endTime, date: dateStr, createdAt: new Date()
       });
       setIsEditing(false);
       setForm({ ...form, user: [], clientName: "" });
     } catch (e) { alert("予約に失敗しました"); }
   };
 
-  // 手動終了
   const handleRelease = async () => {
-    if (data.id && window.confirm(`${roomName}を空室に戻しますか？`)) {
-      await deleteDoc(doc(db, "reservations", data.id));
-    }
+    if (data.id && window.confirm(`${roomName}を空室に戻しますか？`)) await deleteDoc(doc(db, "reservations", data.id));
   };
 
-  // 時間選択肢
   const timeOptions = [];
   for (let h = 8; h <= 18; h++) {
     timeOptions.push(`${h.toString().padStart(2, '0')}:00`);
@@ -144,7 +98,7 @@ export default function TabletDisplay() {
   }
 
   const Clock = () => (
-    <div style={{ position: "absolute", top: "20px", right: "30px", fontSize: "3vw", fontWeight: "bold", color: "rgba(255,255,255,0.9)" }}>
+    <div style={{ position: "absolute", top: "2.5vh", right: "4vw", fontSize: "4vw", fontWeight: "bold", color: "rgba(255,255,255,0.9)" }}>
       {currentTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
     </div>
   );
@@ -154,17 +108,30 @@ export default function TabletDisplay() {
     return (
       <div style={{ ...screenStyle, backgroundColor: "#D90429" }}>
         <Clock />
-        <div style={{ fontSize: "10vw", fontWeight: "900" }}>使用中</div>
-        <div style={{ fontSize: "3vw", opacity: 0.8 }}>{roomName}</div>
+        <div style={{ fontSize: "14vw", fontWeight: "900", lineHeight: "1.1", marginBottom: "1vh" }}>使用中</div>
+        <div style={{ fontSize: "4vw", opacity: 0.9, fontWeight: "bold", marginBottom: "2vh" }}>【{roomName}】</div>
+        
         <div style={infoBoxStyle}>
-          <div style={{ fontSize: "6vw", fontWeight: "bold" }}>{data.purpose}{data.clientName && `（${data.clientName}様）`}</div>
-          <div style={{ fontSize: "4vw", margin: "10px 0" }}>{data.dept}：{data.user}</div>
-          <div style={timeBadgeStyle}>{data.startTime} 〜 {data.endTime}</div>
+          {/* 会議目的と来客名（最重要） */}
+          <div style={{ fontSize: "8vw", fontWeight: "900", color: "#fff", marginBottom: "2vh" }}>
+            {data.purpose}
+            {data.clientName && <div style={{ fontSize: "6vw", color: "#FFD166" }}>{data.clientName} 様</div>}
+          </div>
+          
+          {/* 利用部署と利用者 */}
+          <div style={{ fontSize: "5vw", fontWeight: "bold", marginBottom: "3vh", borderTop: "2px solid rgba(255,255,255,0.3)", paddingTop: "2vh" }}>
+            {data.dept} <span style={{fontSize: "3.5vw", opacity: 0.8}}>（{data.user}）</span>
+          </div>
+          
+          {/* 時間表示（大きく目立たせる） */}
+          <div style={timeBadgeStyle}>{data.startTime} <span style={{fontSize: "4vw"}}>〜</span> {data.endTime}</div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "2vh", marginTop: "2vh" }}>
-          <button onClick={handleRelease} style={finishBtnStyle}>今すぐ終了する</button>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "2.5vh", marginTop: "3vh" }}>
+          <button onClick={handleRelease} style={finishBtnStyle}>利用終了</button>
           <button onClick={() => setIsEditing(true)} style={subBtnStyle}>予約状況を確認</button>
         </div>
+
         {isEditing && (
           <div style={modalOverlayStyle}>
             <div style={modalContentStyle}>
@@ -173,7 +140,7 @@ export default function TabletDisplay() {
                 <div style={resListStyle}>
                   {reservations.length > 0 ? reservations.map(res => (
                     <div key={res.id} style={resCardStyle}><b>{res.startTime}-{res.endTime}</b><br/>{res.name}</div>
-                  )) : <span style={{ color: "#999", padding: "10px", fontSize: "1.5vw" }}>本日の予定はありません</span>}
+                  )) : <span style={{ color: "#999", padding: "10px", fontSize: "2vw" }}>本日の予定はありません</span>}
                 </div>
               </div>
               <div style={{ textAlign: "center", marginTop: "auto" }}>
@@ -190,38 +157,39 @@ export default function TabletDisplay() {
   return (
     <div style={{ ...screenStyle, backgroundColor: "#2B9348" }}>
       <Clock />
-      <div style={{ fontSize: "20vw", fontWeight: "900" }}>空室</div>
-      <div style={{ fontSize: "4vw", marginBottom: "4vh" }}>{roomName}</div>
-      <button onClick={() => setIsEditing(true)} style={startBtnStyle}>予約状況 / 今すぐ利用</button>
+      <div style={{ fontSize: "24vw", fontWeight: "900", lineHeight: "1" }}>空室</div>
+      <div style={{ fontSize: "5vw", fontWeight: "bold", marginTop: "2vh", marginBottom: "6vh" }}>{roomName}</div>
+      <button onClick={() => setIsEditing(true)} style={startBtnStyle}>予約 / 今すぐ利用</button>
+      
       {isEditing && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
+            {/* 予約リスト表示 */}
             <div style={sectionBox}>
               <div style={sectionLabel}>{roomName} 本日の予約状況</div>
               <div style={resListStyle}>
                 {reservations.length > 0 ? reservations.map(res => (
                   <div key={res.id} style={resCardStyle}><b>{res.startTime}-{res.endTime}</b><br/>{res.name}</div>
-                )) : <span style={{ color: "#999", padding: "10px", fontSize: "1.5vw" }}>本日の予定はありません</span>}
+                )) : <span style={{ color: "#999", padding: "10px", fontSize: "2vw" }}>本日の予定はありません</span>}
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px", flex: 1, overflowY: "auto", paddingRight: "5px" }}>
-              {/* 利用部署選択 */}
+
+            {/* 入力フォーム */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.5vh", flex: 1, overflowY: "auto" }}>
               <div style={sectionBox}>
                 <div style={sectionLabel}>1. 利用部署</div>
                 <div style={gridStyle}>
                   {deptPresets.map(d => <button key={d} onClick={() => setForm({...form, dept: d})} style={pBtnStyle(form.dept === d)}>{d}</button>)}
                 </div>
               </div>
-              {/* 利用者選択 */}
               <div style={sectionBox}>
-                <div style={sectionLabel}>2. 利用者（役職/複数可）</div>
+                <div style={sectionLabel}>2. 利用者</div>
                 <div style={gridStyle}>
                   {userPresets.map(u => (
                     <button key={u} onClick={() => toggleUser(u)} style={pBtnStyle(form.user.includes(u))}>{u}</button>
                   ))}
                 </div>
               </div>
-              {/* 目的選択 */}
               <div style={sectionBox}>
                 <div style={sectionLabel}>3. 利用目的</div>
                 <div style={gridStyle}>
@@ -231,22 +199,21 @@ export default function TabletDisplay() {
                   <input placeholder="来客社名を入力" style={inputStyle} value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} />
                 )}
               </div>
-              {/* 時間選択 */}
               <div style={sectionBox}>
                 <div style={sectionLabel}>4. 利用時間</div>
-                <div style={{ display: "flex", justifyContent: "center", gap: "20px", padding: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "center", gap: "3vw", padding: "1vh" }}>
                   <select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>
                     {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
-                  <span style={{ alignSelf: "center", fontSize: "3vw", fontWeight: "bold", color: "#333" }}>〜</span>
+                  <span style={{ alignSelf: "center", fontSize: "4vw", fontWeight: "bold", color: "#333" }}>〜</span>
                   <select style={selectStyle} value={form.endTime} onChange={e => setForm({...form, endTime: e.target.value})}>
                     {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: "20px", paddingTop: "10px" }}>
-              <button onClick={handleReserve} style={{ ...actionBtnStyle, backgroundColor: "#2B9348" }}>利用登録を確定する</button>
+            <div style={{ display: "flex", gap: "2vw", paddingTop: "1vh" }}>
+              <button onClick={handleReserve} style={{ ...actionBtnStyle, backgroundColor: "#2B9348" }}>登録確定</button>
               <button onClick={() => setIsEditing(false)} style={{ ...actionBtnStyle, backgroundColor: "#666" }}>戻る</button>
             </div>
           </div>
@@ -256,21 +223,21 @@ export default function TabletDisplay() {
   );
 }
 
-// スタイル定義
+// スタイル定義の調整
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
-const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.1)", padding: "40px", borderRadius: "30px", margin: "20px 0" };
-const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "10px 40px", borderRadius: "50px", fontSize: "4vw", fontWeight: "900" };
-const finishBtnStyle = { width: "60vw", height: "12vh", backgroundColor: "white", color: "#D90429", fontSize: "5vw", fontWeight: "900", borderRadius: "25px", border: "none", boxShadow: "0 10px 30px rgba(0,0,0,0.3)", cursor: "pointer" };
-const subBtnStyle = { width: "60vw", height: "8vh", backgroundColor: "rgba(255,255,255,0.2)", color: "white", fontSize: "3.5vw", fontWeight: "900", borderRadius: "20px", border: "2px solid white", cursor: "pointer" };
-const startBtnStyle = { padding: "3vh 10vw", fontSize: "6vw", borderRadius: "100px", border: "none", backgroundColor: "white", color: "#2B9348", fontWeight: "900", cursor: "pointer", boxShadow: "0 10px 30px rgba(0,0,0,0.2)" };
-const modalOverlayStyle = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.9)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
-const modalContentStyle = { backgroundColor: "#eee", padding: "25px", borderRadius: "30px", width: "95%", height: "95%", display: "flex", flexDirection: "column", gap: "10px" };
-const sectionBox = { backgroundColor: "white", padding: "15px", borderRadius: "15px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" };
-const sectionLabel = { fontSize: "1.8vw", fontWeight: "900", color: "#444", marginBottom: "12px", textAlign: "left", borderLeft: "8px solid #2B9348", paddingLeft: "15px" };
-const resListStyle = { display: "flex", gap: "10px", overflowX: "auto" };
-const resCardStyle = { backgroundColor: "#f0f2f5", color: "#1a1a1a", padding: "12px", borderRadius: "10px", fontSize: "1.6vw", minWidth: "160px", border: "1px solid #ccc", fontWeight: "bold" };
-const gridStyle = { display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "flex-start" };
-const pBtnStyle = (s) => ({ padding: "15px 10px", fontSize: "2.2vw", borderRadius: "12px", border: s ? "4px solid #1D3557" : "1px solid #bbb", backgroundColor: s ? "#1D3557" : "#fdfdfd", color: s ? "#ffffff" : "#1a1a1a", fontWeight: "900", flex: "1 1 18%", minWidth: "140px" });
-const selectStyle = { padding: "12px 25px", fontSize: "2.5vw", borderRadius: "12px", border: "2px solid #ddd", fontWeight: "bold" };
-const inputStyle = { width: "90%", padding: "15px", fontSize: "2.5vw", borderRadius: "12px", border: "3px solid #2B9348", marginTop: "10px", textAlign: "center", fontWeight: "bold" };
-const actionBtnStyle = { flex: 1, padding: "20px", fontSize: "3.5vw", color: "white", border: "none", borderRadius: "20px", fontWeight: "900" };
+const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.15)", padding: "4vh 5vw", borderRadius: "40px", width: "85vw" };
+const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "1.5vh 6vw", borderRadius: "60px", fontSize: "7vw", fontWeight: "900", boxShadow: "0 10px 20px rgba(0,0,0,0.2)" };
+const finishBtnStyle = { width: "70vw", height: "14vh", backgroundColor: "white", color: "#D90429", fontSize: "6vw", fontWeight: "900", borderRadius: "30px", border: "none", boxShadow: "0 10px 30px rgba(0,0,0,0.3)", cursor: "pointer" };
+const subBtnStyle = { width: "70vw", height: "8vh", backgroundColor: "rgba(255,255,255,0.2)", color: "white", fontSize: "4vw", fontWeight: "900", borderRadius: "20px", border: "2px solid white", cursor: "pointer" };
+const startBtnStyle = { padding: "4vh 12vw", fontSize: "7vw", borderRadius: "120px", border: "none", backgroundColor: "white", color: "#2B9348", fontWeight: "900", cursor: "pointer", boxShadow: "0 10px 40px rgba(0,0,0,0.3)" };
+const modalOverlayStyle = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.95)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
+const modalContentStyle = { backgroundColor: "#f0f0f0", padding: "3vh", borderRadius: "40px", width: "96vw", height: "96vh", display: "flex", flexDirection: "column", gap: "1.5vh" };
+const sectionBox = { backgroundColor: "white", padding: "2vh", borderRadius: "20px" };
+const sectionLabel = { fontSize: "2.5vw", fontWeight: "900", color: "#444", marginBottom: "1.5vh", textAlign: "left", borderLeft: "10px solid #2B9348", paddingLeft: "2vw" };
+const resListStyle = { display: "flex", gap: "1.5vw", overflowX: "auto", paddingBottom: "1vh" };
+const resCardStyle = { backgroundColor: "#e9ecef", color: "#1a1a1a", padding: "2vh", borderRadius: "15px", fontSize: "2.2vw", minWidth: "22vw", border: "1px solid #ccc", fontWeight: "bold", textAlign: "left" };
+const gridStyle = { display: "flex", flexWrap: "wrap", gap: "1.2vw", justifyContent: "flex-start" };
+const pBtnStyle = (s) => ({ padding: "2.5vh 1.5vw", fontSize: "2.8vw", borderRadius: "15px", border: s ? "5px solid #1D3557" : "1px solid #bbb", backgroundColor: s ? "#1D3557" : "#fff", color: s ? "#fff" : "#1a1a1a", fontWeight: "900", flex: "1 1 18%", minWidth: "16vw" });
+const selectStyle = { padding: "2vh 3vw", fontSize: "4vw", borderRadius: "15px", border: "3px solid #ddd", fontWeight: "bold" };
+const inputStyle = { width: "95%", padding: "2.5vh", fontSize: "3.5vw", borderRadius: "15px", border: "4px solid #2B9348", marginTop: "1.5vh", textAlign: "center", fontWeight: "bold" };
+const actionBtnStyle = { flex: 1, padding: "3vh", fontSize: "4.5vw", color: "white", border: "none", borderRadius: "25px", fontWeight: "900" };
