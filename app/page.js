@@ -73,7 +73,9 @@ export default function TabletDisplay() {
   const handleReserve = async () => {
     if (!form.dept || form.user.length === 0 || !form.purpose) return alert("項目をすべて選択してください");
     if (form.startTime >= form.endTime) return alert("終了時間は開始時間より後に設定してください");
-    if (reservations.some(res => res.startTime < form.endTime && form.startTime < res.endTime)) return alert("既に予約が入っています");
+    
+    const isOverlapping = reservations.some(res => res.startTime < form.endTime && form.startTime < res.endTime);
+    if (isOverlapping) return alert("⚠️エラー：この時間帯は既に予約が入っています。");
 
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
@@ -103,6 +105,47 @@ export default function TabletDisplay() {
     </div>
   );
 
+  // --- 入力フォーム用共通コンポーネント ---
+  const ReservationForm = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5vh", flex: 1, overflowY: "auto" }}>
+      <div style={sectionBox}>
+        <div style={sectionLabel}>1. 利用部署</div>
+        <div style={gridStyle}>
+          {deptPresets.map(d => <button key={d} onClick={() => setForm({...form, dept: d})} style={pBtnStyle(form.dept === d)}>{d}</button>)}
+        </div>
+      </div>
+      <div style={sectionBox}>
+        <div style={sectionLabel}>2. 利用者</div>
+        <div style={gridStyle}>
+          {userPresets.map(u => (
+            <button key={u} onClick={() => toggleUser(u)} style={pBtnStyle(form.user.includes(u))}>{u}</button>
+          ))}
+        </div>
+      </div>
+      <div style={sectionBox}>
+        <div style={sectionLabel}>3. 利用目的</div>
+        <div style={gridStyle}>
+          {purposePresets.map(p => <button key={p} onClick={() => setForm({...form, purpose: p})} style={pBtnStyle(form.purpose === p)}>{p}</button>)}
+        </div>
+        {form.purpose === "来客" && (
+          <input placeholder="来客社名を入力" style={inputStyle} value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} />
+        )}
+      </div>
+      <div style={sectionBox}>
+        <div style={sectionLabel}>4. 利用時間</div>
+        <div style={{ display: "flex", justifyContent: "center", gap: "3vw", padding: "1vh" }}>
+          <select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>
+            {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <span style={{ alignSelf: "center", fontSize: "4vw", fontWeight: "bold", color: "#333" }}>〜</span>
+          <select style={selectStyle} value={form.endTime} onChange={e => setForm({...form, endTime: e.target.value})}>
+            {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+
   // --- 画面表示（使用中） ---
   if (data.occupied) {
     return (
@@ -112,24 +155,19 @@ export default function TabletDisplay() {
         <div style={{ fontSize: "4vw", opacity: 0.9, fontWeight: "bold", marginBottom: "2vh" }}>【{roomName}】</div>
         
         <div style={infoBoxStyle}>
-          {/* 会議目的と来客名（最重要） */}
           <div style={{ fontSize: "8vw", fontWeight: "900", color: "#fff", marginBottom: "2vh" }}>
             {data.purpose}
             {data.clientName && <div style={{ fontSize: "6vw", color: "#FFD166" }}>{data.clientName} 様</div>}
           </div>
-          
-          {/* 利用部署と利用者 */}
           <div style={{ fontSize: "5vw", fontWeight: "bold", marginBottom: "3vh", borderTop: "2px solid rgba(255,255,255,0.3)", paddingTop: "2vh" }}>
             {data.dept} <span style={{fontSize: "3.5vw", opacity: 0.8}}>（{data.user}）</span>
           </div>
-          
-          {/* 時間表示（大きく目立たせる） */}
           <div style={timeBadgeStyle}>{data.startTime} <span style={{fontSize: "4vw"}}>〜</span> {data.endTime}</div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "2.5vh", marginTop: "3vh" }}>
           <button onClick={handleRelease} style={finishBtnStyle}>利用終了</button>
-          <button onClick={() => setIsEditing(true)} style={subBtnStyle}>予約状況を確認</button>
+          <button onClick={() => setIsEditing(true)} style={subBtnStyle}>予約状況 / 新規予約</button>
         </div>
 
         {isEditing && (
@@ -143,8 +181,10 @@ export default function TabletDisplay() {
                   )) : <span style={{ color: "#999", padding: "10px", fontSize: "2vw" }}>本日の予定はありません</span>}
                 </div>
               </div>
-              <div style={{ textAlign: "center", marginTop: "auto" }}>
-                <button onClick={() => setIsEditing(false)} style={{ ...actionBtnStyle, backgroundColor: "#666", width: "100%" }}>閉じる</button>
+              <ReservationForm />
+              <div style={{ display: "flex", gap: "2vw", paddingTop: "1vh" }}>
+                <button onClick={handleReserve} style={{ ...actionBtnStyle, backgroundColor: "#2B9348" }}>登録確定</button>
+                <button onClick={() => setIsEditing(false)} style={{ ...actionBtnStyle, backgroundColor: "#666" }}>戻る</button>
               </div>
             </div>
           </div>
@@ -164,7 +204,6 @@ export default function TabletDisplay() {
       {isEditing && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
-            {/* 予約リスト表示 */}
             <div style={sectionBox}>
               <div style={sectionLabel}>{roomName} 本日の予約状況</div>
               <div style={resListStyle}>
@@ -173,45 +212,7 @@ export default function TabletDisplay() {
                 )) : <span style={{ color: "#999", padding: "10px", fontSize: "2vw" }}>本日の予定はありません</span>}
               </div>
             </div>
-
-            {/* 入力フォーム */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "1.5vh", flex: 1, overflowY: "auto" }}>
-              <div style={sectionBox}>
-                <div style={sectionLabel}>1. 利用部署</div>
-                <div style={gridStyle}>
-                  {deptPresets.map(d => <button key={d} onClick={() => setForm({...form, dept: d})} style={pBtnStyle(form.dept === d)}>{d}</button>)}
-                </div>
-              </div>
-              <div style={sectionBox}>
-                <div style={sectionLabel}>2. 利用者</div>
-                <div style={gridStyle}>
-                  {userPresets.map(u => (
-                    <button key={u} onClick={() => toggleUser(u)} style={pBtnStyle(form.user.includes(u))}>{u}</button>
-                  ))}
-                </div>
-              </div>
-              <div style={sectionBox}>
-                <div style={sectionLabel}>3. 利用目的</div>
-                <div style={gridStyle}>
-                  {purposePresets.map(p => <button key={p} onClick={() => setForm({...form, purpose: p})} style={pBtnStyle(form.purpose === p)}>{p}</button>)}
-                </div>
-                {form.purpose === "来客" && (
-                  <input placeholder="来客社名を入力" style={inputStyle} value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} />
-                )}
-              </div>
-              <div style={sectionBox}>
-                <div style={sectionLabel}>4. 利用時間</div>
-                <div style={{ display: "flex", justifyContent: "center", gap: "3vw", padding: "1vh" }}>
-                  <select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>
-                    {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <span style={{ alignSelf: "center", fontSize: "4vw", fontWeight: "bold", color: "#333" }}>〜</span>
-                  <select style={selectStyle} value={form.endTime} onChange={e => setForm({...form, endTime: e.target.value})}>
-                    {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
+            <ReservationForm />
             <div style={{ display: "flex", gap: "2vw", paddingTop: "1vh" }}>
               <button onClick={handleReserve} style={{ ...actionBtnStyle, backgroundColor: "#2B9348" }}>登録確定</button>
               <button onClick={() => setIsEditing(false)} style={{ ...actionBtnStyle, backgroundColor: "#666" }}>戻る</button>
@@ -223,7 +224,7 @@ export default function TabletDisplay() {
   );
 }
 
-// スタイル定義の調整
+// スタイル定義（変更なし）
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.15)", padding: "4vh 5vw", borderRadius: "40px", width: "85vw" };
 const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "1.5vh 6vw", borderRadius: "60px", fontSize: "7vw", fontWeight: "900", boxShadow: "0 10px 20px rgba(0,0,0,0.2)" };
