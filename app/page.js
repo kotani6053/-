@@ -14,7 +14,8 @@ export default function TabletDisplay() {
   const userPresets = ["社長", "専務", "常務", "取締役", "部長", "次長", "課長", "係長", "主任", "その他"];
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
-  const [form, setForm] = useState({ dept: "", user: [], purpose: "", clientName: "", startTime: "08:00", endTime: "09:00" });
+  // 状態に guestCount を追加
+  const [form, setForm] = useState({ dept: "", user: [], purpose: "", clientName: "", guestCount: "1", startTime: "08:00", endTime: "09:00" });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -54,7 +55,17 @@ export default function TabletDisplay() {
       const current = activeRes.find(res => res.startTime <= currentTimeStr && res.endTime >= currentTimeStr);
 
       if (current) {
-        setData({ id: current.id, occupied: true, dept: current.department, user: current.name, purpose: current.purpose, clientName: current.clientName || "", startTime: current.startTime, endTime: current.endTime });
+        setData({ 
+          id: current.id, 
+          occupied: true, 
+          dept: current.department, 
+          user: current.name, 
+          purpose: current.purpose, 
+          clientName: current.clientName || "", 
+          guestCount: current.guestCount || "1", // 取得
+          startTime: current.startTime, 
+          endTime: current.endTime 
+        });
       } else {
         setData({ occupied: false });
       }
@@ -82,10 +93,19 @@ export default function TabletDisplay() {
     
     try {
       await addDoc(collection(db, "reservations"), {
-        room: roomName, department: form.dept, name: form.user.join("、"), purpose: form.purpose, clientName: form.clientName, startTime: form.startTime, endTime: form.endTime, date: dateStr, createdAt: new Date()
+        room: roomName, 
+        department: form.dept, 
+        name: form.user.join("、"), 
+        purpose: form.purpose, 
+        clientName: form.clientName, 
+        guestCount: form.guestCount, // 保存
+        startTime: form.startTime, 
+        endTime: form.endTime, 
+        date: dateStr, 
+        createdAt: new Date()
       });
       setIsEditing(false);
-      setForm({ ...form, user: [], clientName: "" });
+      setForm({ ...form, user: [], clientName: "", guestCount: "1" });
     } catch (e) { alert("予約に失敗しました"); }
   };
 
@@ -122,9 +142,24 @@ export default function TabletDisplay() {
         </div>
       </div>
       <div style={sectionBox}>
-        <div style={sectionLabel}>3. 利用目的</div>
-        <div style={gridStyle}>
-          {purposePresets.map(p => <button key={p} onClick={() => setForm({...form, purpose: p})} style={pBtnStyle(form.purpose === p)}>{p}</button>)}
+        <div style={sectionLabel}>3. 利用目的 & 4. 参加人数</div>
+        <div style={{ display: "flex", gap: "2vw", alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div style={{ flex: 2 }}>
+            <div style={gridStyle}>
+              {purposePresets.map(p => <button key={p} onClick={() => setForm({...form, purpose: p})} style={pBtnStyle(form.purpose === p)}>{p}</button>)}
+            </div>
+          </div>
+          <div style={{ flex: 1, backgroundColor: "#f9f9f9", padding: "1.5vh", borderRadius: "15px", border: "1px solid #ddd" }}>
+            <div style={{ fontSize: "1.8vw", fontWeight: "bold", marginBottom: "1vh", color: "#666" }}>人数</div>
+            <select 
+              style={{ ...selectStyle, width: "100%" }} 
+              value={form.guestCount} 
+              onChange={e => setForm({...form, guestCount: e.target.value})}
+            >
+              {[...Array(9)].map((_, i) => <option key={i+1} value={i+1}>{i+1}名</option>)}
+              <option value="10+">10名以上</option>
+            </select>
+          </div>
         </div>
         {form.purpose === "来客" && (
           <input 
@@ -137,7 +172,7 @@ export default function TabletDisplay() {
         )}
       </div>
       <div style={sectionBox}>
-        <div style={sectionLabel}>4. 利用時間</div>
+        <div style={sectionLabel}>5. 利用時間</div>
         <div style={{ display: "flex", justifyContent: "center", gap: "3vw", padding: "1vh" }}>
           <select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>
             {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
@@ -151,7 +186,6 @@ export default function TabletDisplay() {
     </div>
   );
 
-  // --- 共通の「予約状況セクション」 ---
   const renderReservationsList = () => (
     <div style={sectionBox}>
       <div style={sectionLabel}>{roomName} 本日の予約状況</div>
@@ -161,9 +195,12 @@ export default function TabletDisplay() {
             <div style={{ fontSize: "1.8vw", color: "#D90429", borderBottom: "1px solid #ddd", marginBottom: "0.5vh", paddingBottom: "0.5vh" }}>
               <b>{res.startTime}-{res.endTime}</b>
             </div>
-            <div style={{ fontSize: "2.2vw", fontWeight: "900", color: "#333" }}>{res.purpose}</div>
-            {res.clientName && <div style={{ fontSize: "1.8vw", color: "#666" }}>{res.clientName} 様</div>}
-            <div style={{ fontSize: "1.8vw", color: "#444", marginTop: "0.5vh" }}>{res.name}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "2.2vw", fontWeight: "900", color: "#333" }}>{res.purpose}</div>
+              <div style={{ fontSize: "1.8vw", backgroundColor: "#eee", padding: "2px 8px", borderRadius: "10px", color: "#666" }}>{res.guestCount}名</div>
+            </div>
+            {res.clientName && <div style={{ fontSize: "1.8vw", color: "#666", marginTop: "0.5vh" }}>{res.clientName} 様</div>}
+            <div style={{ fontSize: "1.8vw", color: "#444", marginTop: "0.5vh", borderTop: "1px dashed #eee", paddingTop: "0.5vh" }}>{res.name}</div>
           </div>
         )) : <span style={{ color: "#999", padding: "10px", fontSize: "2vw" }}>本日の予定はありません</span>}
       </div>
@@ -179,7 +216,7 @@ export default function TabletDisplay() {
         
         <div style={infoBoxStyle}>
           <div style={{ fontSize: "8vw", fontWeight: "900", color: "#fff", marginBottom: "2vh" }}>
-            {data.purpose}
+            {data.purpose} <span style={{fontSize: "4vw", verticalAlign: "middle", opacity: 0.8}}>( {data.guestCount}名 )</span>
             {data.clientName && <div style={{ fontSize: "6vw", color: "#FFD166" }}>{data.clientName} 様</div>}
           </div>
           <div style={{ fontSize: "5vw", fontWeight: "bold", marginBottom: "3vh", borderTop: "2px solid rgba(255,255,255,0.3)", paddingTop: "2vh" }}>
@@ -232,7 +269,7 @@ export default function TabletDisplay() {
   );
 }
 
-// スタイル定義
+// スタイル定義（変更・追加分のみ注釈）
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.15)", padding: "4vh 5vw", borderRadius: "40px", width: "85vw" };
 const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "1.5vh 6vw", borderRadius: "60px", fontSize: "7vw", fontWeight: "900", boxShadow: "0 10px 20px rgba(0,0,0,0.2)" };
@@ -247,6 +284,6 @@ const resListStyle = { display: "flex", gap: "1.5vw", overflowX: "auto", padding
 const resCardStyle = { backgroundColor: "#f8f9fa", color: "#1a1a1a", padding: "2vh", borderRadius: "15px", minWidth: "25vw", border: "1px solid #ddd", textAlign: "left", boxShadow: "0 4px 6px rgba(0,0,0,0.05)" };
 const gridStyle = { display: "flex", flexWrap: "wrap", gap: "1.2vw", justifyContent: "flex-start" };
 const pBtnStyle = (s) => ({ padding: "2.5vh 1.5vw", fontSize: "2.8vw", borderRadius: "15px", border: s ? "5px solid #1D3557" : "1px solid #bbb", backgroundColor: s ? "#1D3557" : "#fff", color: s ? "#fff" : "#1a1a1a", fontWeight: "900", flex: "1 1 18%", minWidth: "16vw" });
-const selectStyle = { padding: "2vh 3vw", fontSize: "4vw", borderRadius: "15px", border: "3px solid #ddd", fontWeight: "bold" };
+const selectStyle = { padding: "2vh 3vw", fontSize: "3.2vw", borderRadius: "15px", border: "3px solid #ddd", fontWeight: "bold", backgroundColor: "white" };
 const inputStyle = { width: "95%", padding: "2.5vh", fontSize: "3.5vw", borderRadius: "15px", border: "4px solid #2B9348", marginTop: "1.5vh", textAlign: "center", fontWeight: "bold" };
 const actionBtnStyle = { flex: 1, padding: "3vh", fontSize: "4.5vw", color: "white", border: "none", borderRadius: "25px", fontWeight: "900" };
