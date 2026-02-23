@@ -14,7 +14,6 @@ export default function TabletDisplay() {
   const userPresets = ["社長", "専務", "常務", "取締役", "部長", "次長", "課長", "係長", "主任", "その他"];
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
-  // 状態に guestCount を追加
   const [form, setForm] = useState({ dept: "", user: [], purpose: "", clientName: "", guestCount: "1", startTime: "08:00", endTime: "09:00" });
 
   useEffect(() => {
@@ -31,11 +30,16 @@ export default function TabletDisplay() {
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      // --- 日付ズレ修正の核心部分 ---
       const now = currentTime;
-      const y = now.getFullYear();
-      const m = (now.getMonth() + 1).toString().padStart(2, '0');
-      const d = now.getDate().toString().padStart(2, '0');
+      // 日本時間(JST)として日付文字列を作成
+      const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+      const y = jstDate.getUTCFullYear();
+      const m = (jstDate.getUTCMonth() + 1).toString().padStart(2, '0');
+      const d = jstDate.getUTCDate().toString().padStart(2, '0');
       const currentDateStr = `${y}-${m}-${d}`;
+      // ----------------------------
+
       const currentTimeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -62,7 +66,7 @@ export default function TabletDisplay() {
           user: current.name, 
           purpose: current.purpose, 
           clientName: current.clientName || "", 
-          guestCount: current.guestCount || "1", // 取得
+          guestCount: current.guestCount || "1",
           startTime: current.startTime, 
           endTime: current.endTime 
         });
@@ -88,8 +92,10 @@ export default function TabletDisplay() {
     const isOverlapping = reservations.some(res => res.startTime < form.endTime && form.startTime < res.endTime);
     if (isOverlapping) return alert("⚠️エラー：この時間帯は既に予約が入っています。");
 
+    // 保存時も日本時間を基準にする
     const now = new Date();
-    const dateStr = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+    const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+    const dateStr = `${jstNow.getUTCFullYear()}-${(jstNow.getUTCMonth() + 1).toString().padStart(2, '0')}-${jstNow.getUTCDate().toString().padStart(2, '0')}`;
     
     try {
       await addDoc(collection(db, "reservations"), {
@@ -98,7 +104,7 @@ export default function TabletDisplay() {
         name: form.user.join("、"), 
         purpose: form.purpose, 
         clientName: form.clientName, 
-        guestCount: form.guestCount, // 保存
+        guestCount: form.guestCount,
         startTime: form.startTime, 
         endTime: form.endTime, 
         date: dateStr, 
@@ -269,7 +275,7 @@ export default function TabletDisplay() {
   );
 }
 
-// スタイル定義（変更・追加分のみ注釈）
+// スタイル定義
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.15)", padding: "4vh 5vw", borderRadius: "40px", width: "85vw" };
 const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "1.5vh 6vw", borderRadius: "60px", fontSize: "7vw", fontWeight: "900", boxShadow: "0 10px 20px rgba(0,0,0,0.2)" };
