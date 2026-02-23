@@ -10,14 +10,14 @@ export default function TabletDisplay() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [roomName, setRoomName] = useState("会議室"); 
 
-  // --- ヘルパー関数: 常に正確な「日本時間の今日」を YYYY-MM-DD で返す ---
-  const getJstDateStr = (date) => {
-    return new Intl.DateTimeFormat('sv-SE', {
-      timeZone: 'Asia/Tokyo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).format(date);
+  // --- 【重要】日本時間の今日(YYYY-MM-DD)を確実に取得する関数 ---
+  const getJSTDateString = (dateObj) => {
+    const formatter = new Intl.DateTimeFormat('ja-JP', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: 'Asia/Tokyo'
+    });
+    // 「2024/02/24」を「2024-02-24」に置換
+    return formatter.format(dateObj).replace(/\//g, '-');
   };
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
@@ -40,18 +40,18 @@ export default function TabletDisplay() {
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      // 修正: 確実に日本時間の今日を取得
-      const currentDateStr = getJstDateStr(currentTime);
+      // 端末の現在時刻から「日本時間の今日」と「今の時間」を確定
+      const currentDateStr = getJSTDateString(currentTime);
       const currentTimeStr = currentTime.toLocaleTimeString('ja-JP', { 
-        hour: '2-digit', 
-        minute: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
         timeZone: 'Asia/Tokyo' 
       });
 
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // 予約データの日付と、今の日本時間の日付を比較
       const todayRes = allRes.filter(res => res.date === currentDateStr);
 
-      // 古い予約の削除
+      // 終了時間を過ぎた予約を自動削除
       todayRes.forEach(async (res) => {
         if (res.endTime < currentTimeStr) {
           try { await deleteDoc(doc(db, "reservations", res.id)); } catch (e) { console.error(e); }
@@ -99,8 +99,8 @@ export default function TabletDisplay() {
     const isOverlapping = reservations.some(res => res.startTime < form.endTime && form.startTime < res.endTime);
     if (isOverlapping) return alert("⚠️エラー：この時間帯は既に予約が入っています。");
 
-    // 保存時も確実に日本時間の今日を使用
-    const dateStr = getJstDateStr(new Date());
+    // 保存する日付を確実に「日本時間の今日」にする
+    const dateStr = getJSTDateString(new Date());
     
     try {
       await addDoc(collection(db, "reservations"), {
@@ -133,8 +133,7 @@ export default function TabletDisplay() {
   const Clock = () => (
     <div style={{ position: "absolute", top: "2.5vh", right: "4vw", fontSize: "4vw", fontWeight: "bold", color: "rgba(255,255,255,0.9)" }}>
       {currentTime.toLocaleTimeString('ja-JP', { 
-        hour: '2-digit', 
-        minute: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
         timeZone: 'Asia/Tokyo' 
       })}
     </div>
@@ -222,13 +221,13 @@ export default function TabletDisplay() {
     </div>
   );
 
+  // （以下、スタイルの定義などは元のコードと同じ）
   if (data.occupied) {
     return (
       <div style={{ ...screenStyle, backgroundColor: "#D90429" }}>
         <Clock />
         <div style={{ fontSize: "14vw", fontWeight: "900", lineHeight: "1.1", marginBottom: "1vh" }}>使用中</div>
         <div style={{ fontSize: "4vw", opacity: 0.9, fontWeight: "bold", marginBottom: "2vh" }}>【{roomName}】</div>
-        
         <div style={infoBoxStyle}>
           <div style={{ fontSize: "8vw", fontWeight: "900", color: "#fff", marginBottom: "2vh" }}>
             {data.purpose} <span style={{fontSize: "4vw", verticalAlign: "middle", opacity: 0.8}}>( {data.guestCount}名 )</span>
@@ -239,12 +238,10 @@ export default function TabletDisplay() {
           </div>
           <div style={timeBadgeStyle}>{data.startTime} <span style={{fontSize: "4vw"}}>〜</span> {data.endTime}</div>
         </div>
-
         <div style={{ display: "flex", flexDirection: "column", gap: "2.5vh", marginTop: "3vh" }}>
           <button onClick={handleRelease} style={finishBtnStyle}>利用終了</button>
           <button onClick={() => setIsEditing(true)} style={subBtnStyle}>予約状況 / 新規予約</button>
         </div>
-
         {isEditing && (
           <div style={modalOverlayStyle}>
             <div style={modalContentStyle}>
@@ -267,7 +264,6 @@ export default function TabletDisplay() {
       <div style={{ fontSize: "24vw", fontWeight: "900", lineHeight: "1" }}>空室</div>
       <div style={{ fontSize: "5vw", fontWeight: "bold", marginTop: "2vh", marginBottom: "6vh" }}>{roomName}</div>
       <button onClick={() => setIsEditing(true)} style={startBtnStyle}>予約 / 今すぐ利用</button>
-      
       {isEditing && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
@@ -284,7 +280,7 @@ export default function TabletDisplay() {
   );
 }
 
-// スタイル定義
+// スタイル定義は変更なし（省略せず含めてください）
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", fontFamily: "'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif", textAlign: "center", overflow: "hidden" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.15)", padding: "4vh 5vw", borderRadius: "40px", width: "85vw" };
 const timeBadgeStyle = { display: "inline-block", backgroundColor: "white", color: "#D90429", padding: "1.5vh 6vw", borderRadius: "60px", fontSize: "7vw", fontWeight: "900", boxShadow: "0 10px 20px rgba(0,0,0,0.2)" };
