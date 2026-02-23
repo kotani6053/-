@@ -10,6 +10,16 @@ export default function TabletDisplay() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [roomName, setRoomName] = useState("会議室"); 
 
+  // --- ヘルパー関数: 常に正確な「日本時間の今日」を YYYY-MM-DD で返す ---
+  const getJstDateStr = (date) => {
+    return new Intl.DateTimeFormat('sv-SE', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(date);
+  };
+
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
   const userPresets = ["社長", "専務", "常務", "取締役", "部長", "次長", "課長", "係長", "主任", "その他"];
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
@@ -30,21 +40,18 @@ export default function TabletDisplay() {
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("room", "==", roomName));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      // --- 日付ズレ修正の核心部分 ---
-      const now = currentTime;
-      // 日本時間(JST)として日付文字列を作成
-      const jstDate = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-      const y = jstDate.getUTCFullYear();
-      const m = (jstDate.getUTCMonth() + 1).toString().padStart(2, '0');
-      const d = jstDate.getUTCDate().toString().padStart(2, '0');
-      const currentDateStr = `${y}-${m}-${d}`;
-      // ----------------------------
-
-      const currentTimeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+      // 修正: 確実に日本時間の今日を取得
+      const currentDateStr = getJstDateStr(currentTime);
+      const currentTimeStr = currentTime.toLocaleTimeString('ja-JP', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: 'Asia/Tokyo' 
+      });
 
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const todayRes = allRes.filter(res => res.date === currentDateStr);
 
+      // 古い予約の削除
       todayRes.forEach(async (res) => {
         if (res.endTime < currentTimeStr) {
           try { await deleteDoc(doc(db, "reservations", res.id)); } catch (e) { console.error(e); }
@@ -92,10 +99,8 @@ export default function TabletDisplay() {
     const isOverlapping = reservations.some(res => res.startTime < form.endTime && form.startTime < res.endTime);
     if (isOverlapping) return alert("⚠️エラー：この時間帯は既に予約が入っています。");
 
-    // 保存時も日本時間を基準にする
-    const now = new Date();
-    const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-    const dateStr = `${jstNow.getUTCFullYear()}-${(jstNow.getUTCMonth() + 1).toString().padStart(2, '0')}-${jstNow.getUTCDate().toString().padStart(2, '0')}`;
+    // 保存時も確実に日本時間の今日を使用
+    const dateStr = getJstDateStr(new Date());
     
     try {
       await addDoc(collection(db, "reservations"), {
@@ -127,7 +132,11 @@ export default function TabletDisplay() {
 
   const Clock = () => (
     <div style={{ position: "absolute", top: "2.5vh", right: "4vw", fontSize: "4vw", fontWeight: "bold", color: "rgba(255,255,255,0.9)" }}>
-      {currentTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+      {currentTime.toLocaleTimeString('ja-JP', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: 'Asia/Tokyo' 
+      })}
     </div>
   );
 
