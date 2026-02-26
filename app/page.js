@@ -22,8 +22,6 @@ export default function TabletDisplay() {
   const [isEditing, setIsEditing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [roomName, setRoomName] = useState("会議室"); 
-  
-  // ★ 編集中の予約IDを管理
   const [editingId, setEditingId] = useState(null);
 
   const getJSTDateStr = (date) => {
@@ -66,12 +64,6 @@ export default function TabletDisplay() {
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const todayRes = allRes.filter(res => res.date === currentDateStr);
 
-      todayRes.forEach(async (res) => {
-        if (res.endTime < currentTimeStr) {
-          try { await deleteDoc(doc(db, "reservations", res.id)); } catch (e) { console.error(e); }
-        }
-      });
-
       const activeRes = todayRes
         .filter(res => res.endTime >= currentTimeStr)
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -92,7 +84,6 @@ export default function TabletDisplay() {
     return () => unsubscribe();
   }, [roomName, currentTime]);
 
-  // ★ 編集を開始する関数
   const startEdit = (res) => {
     setEditingId(res.id);
     setForm({
@@ -110,7 +101,6 @@ export default function TabletDisplay() {
     if (!form.dept || form.user.length === 0 || !form.purpose) return alert("項目をすべて選択してください");
     if (form.startTime >= form.endTime) return alert("終了時間は開始時間より後に設定してください");
     
-    // 重複チェック（自分自身は除く）
     const isOverlapping = reservations.some(res => 
       res.id !== editingId && res.startTime < form.endTime && form.startTime < res.endTime
     );
@@ -131,20 +121,29 @@ export default function TabletDisplay() {
     
     try {
       if (editingId) {
-        // ★ 更新処理
         await updateDoc(doc(db, "reservations", editingId), reservationData);
       } else {
-        // 新規追加
         await addDoc(collection(db, "reservations"), { ...reservationData, createdAt: new Date() });
       }
-      setIsEditing(false);
-      setEditingId(null);
-      setForm({ dept: "", user: [], clientName: "", guestCount: "1", purpose: "", startTime: "08:00", endTime: "09:00" });
+      closeModal();
     } catch (e) { alert("保存に失敗しました"); }
   };
 
-  const handleRelease = async () => {
-    if (data.id && window.confirm(`${roomName}を空室に戻しますか？`)) await deleteDoc(doc(db, "reservations", data.id));
+  // ★ 削除用関数
+  const handleDelete = async () => {
+    if (!editingId) return;
+    if (window.confirm("この予約を削除してもよろしいですか？")) {
+      try {
+        await deleteDoc(doc(db, "reservations", editingId));
+        closeModal();
+      } catch (e) { alert("削除に失敗しました"); }
+    }
+  };
+
+  const closeModal = () => {
+    setIsEditing(false);
+    setEditingId(null);
+    setForm({ dept: "", user: [], clientName: "", guestCount: "1", purpose: "", startTime: "08:00", endTime: "09:00" });
   };
 
   const timeOptions = [];
@@ -156,33 +155,6 @@ export default function TabletDisplay() {
   const Clock = () => (
     <div style={{ position: "absolute", top: "2.5vh", right: "4vw", fontSize: "4vw", fontWeight: "bold", color: "rgba(255,255,255,0.9)" }}>
       {getJSTTimeStr(currentTime)}
-    </div>
-  );
-
-  const renderInputForm = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5vh", flex: 1, overflowY: "auto" }}>
-      <div style={{...sectionLabel, color: "#D90429", fontSize: "3vw", borderLeft: "8px solid #D90429"}}>
-        {editingId ? "【編集モード】予約内容を修正中" : "新規予約入力"}
-      </div>
-      <div style={sectionBox}><div style={sectionLabel}>1. 利用部署</div><div style={gridStyle}>{deptPresets.map(d => <button key={d} onClick={() => setForm({...form, dept: d})} style={pBtnStyle(form.dept === d)}>{d}</button>)}</div></div>
-      <div style={sectionBox}><div style={sectionLabel}>2. 利用者</div><div style={gridStyle}>{userPresets.map(u => <button key={u} onClick={() => { const current = form.user; const next = current.includes(u) ? current.filter(x => x !== u) : [...current, u]; setForm({...form, user: next}) }} style={pBtnStyle(form.user.includes(u))}>{u}</button>)}</div></div>
-      <div style={sectionBox}><div style={sectionLabel}>3. 目的 & 4. 人数</div><div style={{display:"flex", gap:"2vw"}}><div style={gridStyle}>{purposePresets.map(p => <button key={p} onClick={() => setForm({...form, purpose: p})} style={pBtnStyle(form.purpose === p)}>{p}</button>)}</div><select style={selectStyle} value={form.guestCount} onChange={e => setForm({...form, guestCount: e.target.value})}>{[...Array(9)].map((_, i) => <option key={i+1} value={i+1}>{i+1}名</option>)}</select></div>
-      {form.purpose === "来客" && <input placeholder="社名を入力" style={inputStyle} value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} />}</div>
-      <div style={sectionBox}><div style={sectionLabel}>5. 時間</div><div style={{display:"flex", justifyContent:"center", gap:"3vw"}}><select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>{timeOptions.map(t => <option key={t} value={t}>{t}</option>)}</select><span>〜</span><select style={selectStyle} value={form.endTime} onChange={e => setForm({...form, endTime: e.target.value})}>{timeOptions.map(t => <option key={t} value={t}>{t}</option>)}</select></div></div>
-    </div>
-  );
-
-  const renderReservationsList = () => (
-    <div style={sectionBox}>
-      <div style={sectionLabel}>{roomName} 今日の予約（タップで編集）</div>
-      <div style={resListStyle}>
-        {reservations.length > 0 ? reservations.map(res => (
-          <div key={res.id} onClick={() => startEdit(res)} style={{...resCardStyle, border: editingId === res.id ? "4px solid #D90429" : "none", backgroundColor: editingId === res.id ? "#fff" : "#eee"}}>
-            <b>{res.startTime}-{res.endTime}</b><br/>{res.purpose} ({res.guestCount}名)<br/><small>{res.name}</small>
-            {editingId === res.id && <div style={{color: "#D90429", fontWeight: "bold", fontSize: "1vw"}}>選択中</div>}
-          </div>
-        )) : <span style={{color:"#999"}}>予約なし</span>}
-      </div>
     </div>
   );
 
@@ -213,13 +185,41 @@ export default function TabletDisplay() {
       {isEditing && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
-            {renderReservationsList()}
-            {renderInputForm()}
+            {/* 予約リスト表示 */}
+            <div style={sectionBox}>
+              <div style={sectionLabel}>{roomName} 今日の予約（タップで編集/削除）</div>
+              <div style={resListStyle}>
+                {reservations.length > 0 ? reservations.map(res => (
+                  <div key={res.id} onClick={() => startEdit(res)} style={{...resCardStyle, border: editingId === res.id ? "4px solid #D90429" : "none", backgroundColor: editingId === res.id ? "#fff" : "#eee"}}>
+                    <b>{res.startTime}-{res.endTime}</b><br/>{res.purpose}<br/><small>{res.name}</small>
+                  </div>
+                )) : <span style={{color:"#999"}}>予約なし</span>}
+              </div>
+            </div>
+
+            {/* 入力フォーム部分 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.5vh", flex: 1, overflowY: "auto" }}>
+              <div style={sectionBox}><div style={sectionLabel}>1. 利用部署</div><div style={gridStyle}>{deptPresets.map(d => <button key={d} onClick={() => setForm({...form, dept: d})} style={pBtnStyle(form.dept === d)}>{d}</button>)}</div></div>
+              <div style={sectionBox}><div style={sectionLabel}>2. 利用者</div><div style={gridStyle}>{userPresets.map(u => <button key={u} onClick={() => { const current = form.user; const next = current.includes(u) ? current.filter(x => x !== u) : [...current, u]; setForm({...form, user: next}) }} style={pBtnStyle(form.user.includes(u))}>{u}</button>)}</div></div>
+              <div style={sectionBox}><div style={sectionLabel}>3. 目的 & 人数</div><div style={{display:"flex", gap:"2vw"}}><div style={gridStyle}>{purposePresets.map(p => <button key={p} onClick={() => setForm({...form, purpose: p})} style={pBtnStyle(form.purpose === p)}>{p}</button>)}</div><select style={selectStyle} value={form.guestCount} onChange={e => setForm({...form, guestCount: e.target.value})}>{[...Array(9)].map((_, i) => <option key={i+1} value={i+1}>{i+1}名</option>)}</select></div>
+              {form.purpose === "来客" && <input placeholder="社名を入力" style={inputStyle} value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} />}</div>
+              <div style={sectionBox}><div style={sectionLabel}>5. 時間</div><div style={{display:"flex", justifyContent:"center", gap:"3vw"}}><select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>{timeOptions.map(t => <option key={t} value={t}>{t}</option>)}</select><span>〜</span><select style={selectStyle} value={form.endTime} onChange={e => setForm({...form, endTime: e.target.value})}>{timeOptions.map(t => <option key={t} value={t}>{t}</option>)}</select></div></div>
+            </div>
+
+            {/* アクションボタン */}
             <div style={{display:"flex", gap:"2vw"}}>
               <button onClick={handleReserve} style={{...actionBtnStyle, backgroundColor:"#2B9348"}}>
                 {editingId ? "更新して保存" : "確定"}
               </button>
-              <button onClick={() => { setIsEditing(false); setEditingId(null); }} style={{...actionBtnStyle, backgroundColor:"#666"}}>戻る</button>
+              
+              {/* ★ 編集中の時だけ削除ボタンを出す */}
+              {editingId && (
+                <button onClick={handleDelete} style={{...actionBtnStyle, backgroundColor:"#D90429"}}>
+                  予約を削除
+                </button>
+              )}
+              
+              <button onClick={closeModal} style={{...actionBtnStyle, backgroundColor:"#666"}}>戻る</button>
             </div>
           </div>
         </div>
@@ -240,7 +240,7 @@ const modalContentStyle = { backgroundColor: "#f0f0f0", padding: "3vh", borderRa
 const sectionBox = { backgroundColor: "white", padding: "1.5vh", borderRadius: "15px" };
 const sectionLabel = { fontSize: "2vw", fontWeight: "900", textAlign: "left", borderLeft: "5px solid #2B9348", paddingLeft: "1vw", marginBottom: "1vh" };
 const resListStyle = { display: "flex", gap: "1vw", overflowX: "auto", paddingBottom: "1vh" };
-const resCardStyle = { padding: "1.5vh", borderRadius: "10px", minWidth: "20vw", fontSize: "1.5vw", textAlign: "left", cursor: "pointer", transition: "all 0.2s" };
+const resCardStyle = { padding: "1.5vh", borderRadius: "10px", minWidth: "20vw", fontSize: "1.5vw", textAlign: "left", cursor: "pointer" };
 const gridStyle = { display: "flex", flexWrap: "wrap", gap: "1vw" };
 const pBtnStyle = (s) => ({ padding: "1.5vh 2vw", fontSize: "2vw", borderRadius: "10px", border: "none", backgroundColor: s ? "#1D3557" : "#ddd", color: s ? "#fff" : "#333", cursor: "pointer" });
 const selectStyle = { padding: "1vh", fontSize: "2vw", borderRadius: "10px" };
