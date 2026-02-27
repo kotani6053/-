@@ -84,6 +84,15 @@ export default function TabletDisplay() {
     return () => unsubscribe();
   }, [roomName, currentTime]);
 
+  // ★ 使用中画面の「利用終了」ボタンで即座に終了させる関数
+  const handleFinishNow = async () => {
+    if (data.id && window.confirm(`${roomName}を空室に戻しますか？`)) {
+      try {
+        await deleteDoc(doc(db, "reservations", data.id));
+      } catch (e) { alert("終了処理に失敗しました"); }
+    }
+  };
+
   const startEdit = (res) => {
     setEditingId(res.id);
     setForm({
@@ -129,7 +138,6 @@ export default function TabletDisplay() {
     } catch (e) { alert("保存に失敗しました"); }
   };
 
-  // ★ 削除用関数
   const handleDelete = async () => {
     if (!editingId) return;
     if (window.confirm("この予約を削除してもよろしいですか？")) {
@@ -164,28 +172,28 @@ export default function TabletDisplay() {
       <div style={{ fontSize: data.occupied ? "14vw" : "24vw", fontWeight: "900" }}>{data.occupied ? "使用中" : "空室"}</div>
       
       {data.occupied ? (
-        <div style={infoBoxStyle}>
-          <div style={{ fontSize: "7vw", fontWeight: "900" }}>{data.purpose} ({data.guestCount}名)</div>
-          {data.clientName && <div style={{ fontSize: "5vw", color: "#FFD166" }}>{data.clientName} 様</div>}
-          <div style={{ fontSize: "4vw", marginTop: "2vh" }}>{data.dept} ({data.user})</div>
-          <div style={timeBadgeStyle}>{data.startTime} 〜 {data.endTime}</div>
-        </div>
+        <>
+          <div style={infoBoxStyle}>
+            <div style={{ fontSize: "7vw", fontWeight: "900" }}>{data.purpose} ({data.guestCount}名)</div>
+            {data.clientName && <div style={{ fontSize: "5vw", color: "#FFD166" }}>{data.clientName} 様</div>}
+            <div style={{ fontSize: "4vw", marginTop: "2vh" }}>{data.dept} ({data.user})</div>
+            <div style={timeBadgeStyle}>{data.startTime} 〜 {data.endTime}</div>
+          </div>
+          {/* 使用中のみ：即時終了ボタン */}
+          <button onClick={handleFinishNow} style={finishBtnStyle}>利用終了</button>
+          <button onClick={() => setIsEditing(true)} style={subBtnStyle}>予約状況 / 新規予約</button>
+        </>
       ) : (
-        <div style={{ fontSize: "5vw", marginBottom: "6vh" }}>{roomName}</div>
-      )}
-
-      <button onClick={() => { setIsEditing(true); setEditingId(null); }} style={data.occupied ? finishBtnStyle : startBtnStyle}>
-        {data.occupied ? "利用終了" : "予約 / 今すぐ利用"}
-      </button>
-      
-      {data.occupied && (
-        <button onClick={() => setIsEditing(true)} style={subBtnStyle}>予約状況 / 新規予約</button>
+        <>
+          <div style={{ fontSize: "5vw", marginBottom: "6vh" }}>{roomName}</div>
+          {/* 空室のみ：モーダルを開くボタン */}
+          <button onClick={() => { setIsEditing(true); setEditingId(null); }} style={startBtnStyle}>予約 / 今すぐ利用</button>
+        </>
       )}
 
       {isEditing && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
-            {/* 予約リスト表示 */}
             <div style={sectionBox}>
               <div style={sectionLabel}>{roomName} 今日の予約（タップで編集/削除）</div>
               <div style={resListStyle}>
@@ -197,7 +205,6 @@ export default function TabletDisplay() {
               </div>
             </div>
 
-            {/* 入力フォーム部分 */}
             <div style={{ display: "flex", flexDirection: "column", gap: "1.5vh", flex: 1, overflowY: "auto" }}>
               <div style={sectionBox}><div style={sectionLabel}>1. 利用部署</div><div style={gridStyle}>{deptPresets.map(d => <button key={d} onClick={() => setForm({...form, dept: d})} style={pBtnStyle(form.dept === d)}>{d}</button>)}</div></div>
               <div style={sectionBox}><div style={sectionLabel}>2. 利用者</div><div style={gridStyle}>{userPresets.map(u => <button key={u} onClick={() => { const current = form.user; const next = current.includes(u) ? current.filter(x => x !== u) : [...current, u]; setForm({...form, user: next}) }} style={pBtnStyle(form.user.includes(u))}>{u}</button>)}</div></div>
@@ -206,19 +213,15 @@ export default function TabletDisplay() {
               <div style={sectionBox}><div style={sectionLabel}>5. 時間</div><div style={{display:"flex", justifyContent:"center", gap:"3vw"}}><select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>{timeOptions.map(t => <option key={t} value={t}>{t}</option>)}</select><span>〜</span><select style={selectStyle} value={form.endTime} onChange={e => setForm({...form, endTime: e.target.value})}>{timeOptions.map(t => <option key={t} value={t}>{t}</option>)}</select></div></div>
             </div>
 
-            {/* アクションボタン */}
             <div style={{display:"flex", gap:"2vw"}}>
               <button onClick={handleReserve} style={{...actionBtnStyle, backgroundColor:"#2B9348"}}>
                 {editingId ? "更新して保存" : "確定"}
               </button>
-              
-              {/* ★ 編集中の時だけ削除ボタンを出す */}
               {editingId && (
                 <button onClick={handleDelete} style={{...actionBtnStyle, backgroundColor:"#D90429"}}>
                   予約を削除
                 </button>
               )}
-              
               <button onClick={closeModal} style={{...actionBtnStyle, backgroundColor:"#666"}}>戻る</button>
             </div>
           </div>
