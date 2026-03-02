@@ -24,6 +24,7 @@ export default function TabletDisplay() {
   const [roomName, setRoomName] = useState("会議室"); 
   const [editingId, setEditingId] = useState(null);
 
+  // 日本時間の日付取得
   const getJSTDateStr = (date) => {
     const jstNow = new Date(date.getTime() + (9 * 60 * 60 * 1000));
     const y = jstNow.getUTCFullYear();
@@ -32,6 +33,7 @@ export default function TabletDisplay() {
     return `${y}-${m}-${d}`;
   };
 
+  // 日本時間の時刻取得
   const getJSTTimeStr = (date) => {
     const jstNow = new Date(date.getTime() + (9 * 60 * 60 * 1000));
     const h = String(jstNow.getUTCHours()).padStart(2, '0');
@@ -64,6 +66,13 @@ export default function TabletDisplay() {
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const todayRes = allRes.filter(res => res.date === currentDateStr);
 
+      // --- 【ここが復活！】終了時間を過ぎた予約を自動削除 ---
+      todayRes.forEach(async (res) => {
+        if (res.endTime < currentTimeStr) {
+          try { await deleteDoc(doc(db, "reservations", res.id)); } catch (e) { console.error(e); }
+        }
+      });
+
       const activeRes = todayRes
         .filter(res => res.endTime >= currentTimeStr)
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -84,12 +93,9 @@ export default function TabletDisplay() {
     return () => unsubscribe();
   }, [roomName, currentTime]);
 
-  // ★ 使用中画面の「利用終了」ボタンで即座に終了させる関数
   const handleFinishNow = async () => {
     if (data.id && window.confirm(`${roomName}を空室に戻しますか？`)) {
-      try {
-        await deleteDoc(doc(db, "reservations", data.id));
-      } catch (e) { alert("終了処理に失敗しました"); }
+      try { await deleteDoc(doc(db, "reservations", data.id)); } catch (e) { alert("終了処理に失敗しました"); }
     }
   };
 
@@ -179,14 +185,12 @@ export default function TabletDisplay() {
             <div style={{ fontSize: "4vw", marginTop: "2vh" }}>{data.dept} ({data.user})</div>
             <div style={timeBadgeStyle}>{data.startTime} 〜 {data.endTime}</div>
           </div>
-          {/* 使用中のみ：即時終了ボタン */}
           <button onClick={handleFinishNow} style={finishBtnStyle}>利用終了</button>
           <button onClick={() => setIsEditing(true)} style={subBtnStyle}>予約状況 / 新規予約</button>
         </>
       ) : (
         <>
           <div style={{ fontSize: "5vw", marginBottom: "6vh" }}>{roomName}</div>
-          {/* 空室のみ：モーダルを開くボタン */}
           <button onClick={() => { setIsEditing(true); setEditingId(null); }} style={startBtnStyle}>予約 / 今すぐ利用</button>
         </>
       )}
