@@ -24,7 +24,6 @@ export default function TabletDisplay() {
   const [roomName, setRoomName] = useState("会議室"); 
   const [editingId, setEditingId] = useState(null);
 
-  // 日本時間の日付取得
   const getJSTDateStr = (date) => {
     const jstNow = new Date(date.getTime() + (9 * 60 * 60 * 1000));
     const y = jstNow.getUTCFullYear();
@@ -33,7 +32,6 @@ export default function TabletDisplay() {
     return `${y}-${m}-${d}`;
   };
 
-  // 日本時間の時刻取得
   const getJSTTimeStr = (date) => {
     const jstNow = new Date(date.getTime() + (9 * 60 * 60 * 1000));
     const h = String(jstNow.getUTCHours()).padStart(2, '0');
@@ -42,7 +40,8 @@ export default function TabletDisplay() {
   };
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
-  const userPresets = ["社長", "専務", "常務", "取締役", "部長", "次長", "課長", "係長", "主任", "その他"];
+  // ★ 会長、執行役員を追加 / 取締役を削除
+  const userPresets = ["会長", "社長", "専務", "常務", "執行役員", "部長", "次長", "課長", "係長", "主任", "その他"];
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
   const [form, setForm] = useState({ dept: "", user: [], purpose: "", clientName: "", guestCount: "1", startTime: "08:00", endTime: "09:00" });
@@ -66,7 +65,6 @@ export default function TabletDisplay() {
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const todayRes = allRes.filter(res => res.date === currentDateStr);
 
-      // --- 【ここが復活！】終了時間を過ぎた予約を自動削除 ---
       todayRes.forEach(async (res) => {
         if (res.endTime < currentTimeStr) {
           try { await deleteDoc(doc(db, "reservations", res.id)); } catch (e) { console.error(e); }
@@ -160,12 +158,6 @@ export default function TabletDisplay() {
     setForm({ dept: "", user: [], clientName: "", guestCount: "1", purpose: "", startTime: "08:00", endTime: "09:00" });
   };
 
-  const timeOptions = [];
-  for (let h = 8; h <= 18; h++) {
-    timeOptions.push(`${h.toString().padStart(2, '0')}:00`);
-    if (h !== 18) timeOptions.push(`${h.toString().padStart(2, '0')}:30`);
-  }
-
   const Clock = () => (
     <div style={{ position: "absolute", top: "2.5vh", right: "4vw", fontSize: "4vw", fontWeight: "bold", color: "rgba(255,255,255,0.9)" }}>
       {getJSTTimeStr(currentTime)}
@@ -214,7 +206,16 @@ export default function TabletDisplay() {
               <div style={sectionBox}><div style={sectionLabel}>2. 利用者</div><div style={gridStyle}>{userPresets.map(u => <button key={u} onClick={() => { const current = form.user; const next = current.includes(u) ? current.filter(x => x !== u) : [...current, u]; setForm({...form, user: next}) }} style={pBtnStyle(form.user.includes(u))}>{u}</button>)}</div></div>
               <div style={sectionBox}><div style={sectionLabel}>3. 目的 & 人数</div><div style={{display:"flex", gap:"2vw"}}><div style={gridStyle}>{purposePresets.map(p => <button key={p} onClick={() => setForm({...form, purpose: p})} style={pBtnStyle(form.purpose === p)}>{p}</button>)}</div><select style={selectStyle} value={form.guestCount} onChange={e => setForm({...form, guestCount: e.target.value})}>{[...Array(9)].map((_, i) => <option key={i+1} value={i+1}>{i+1}名</option>)}</select></div>
               {form.purpose === "来客" && <input placeholder="社名を入力" style={inputStyle} value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} />}</div>
-              <div style={sectionBox}><div style={sectionLabel}>5. 時間</div><div style={{display:"flex", justifyContent:"center", gap:"3vw"}}><select style={selectStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})}>{timeOptions.map(t => <option key={t} value={t}>{t}</option>)}</select><span>〜</span><select style={selectStyle} value={form.endTime} onChange={e => setForm({...form, endTime: e.target.value})}>{timeOptions.map(t => <option key={t} value={t}>{t}</option>)}</select></div></div>
+              
+              {/* ★ 時間設定を入力式 (type="time") に変更 */}
+              <div style={sectionBox}>
+                <div style={sectionLabel}>5. 時間設定 (自由入力)</div>
+                <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:"3vw"}}>
+                  <input type="time" style={timeInputStyle} value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} />
+                  <span style={{fontSize: "3vw", fontWeight: "bold"}}>〜</span>
+                  <input type="time" style={timeInputStyle} value={form.endTime} onChange={e => setForm({...form, endTime: e.target.value})} />
+                </div>
+              </div>
             </div>
 
             <div style={{display:"flex", gap:"2vw"}}>
@@ -235,7 +236,7 @@ export default function TabletDisplay() {
   );
 }
 
-// --- スタイル定義（変更なし） ---
+// --- スタイル定義 ---
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", textAlign: "center", overflow: "hidden", fontFamily: "sans-serif" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.15)", padding: "4vh 5vw", borderRadius: "40px", width: "85vw", marginBottom: "3vh" };
 const timeBadgeStyle = { display: "block", backgroundColor: "white", color: "#D90429", padding: "1vh", borderRadius: "60px", fontSize: "6vw", fontWeight: "900", marginTop: "2vh" };
@@ -252,4 +253,6 @@ const gridStyle = { display: "flex", flexWrap: "wrap", gap: "1vw" };
 const pBtnStyle = (s) => ({ padding: "1.5vh 2vw", fontSize: "2vw", borderRadius: "10px", border: "none", backgroundColor: s ? "#1D3557" : "#ddd", color: s ? "#fff" : "#333", cursor: "pointer" });
 const selectStyle = { padding: "1vh", fontSize: "2vw", borderRadius: "10px" };
 const inputStyle = { width: "100%", padding: "1.5vh", fontSize: "2.5vw", borderRadius: "10px", border: "2px solid #2B9348", marginTop: "1vh" };
+// ★ 時間入力用のスタイル追加
+const timeInputStyle = { padding: "1.5vh 3vw", fontSize: "3vw", borderRadius: "10px", border: "2px solid #2B9348", textAlign: "center", backgroundColor: "#fff", fontWeight: "bold" };
 const actionBtnStyle = { flex: 1, padding: "2vh", fontSize: "3vw", color: "white", border: "none", borderRadius: "15px", fontWeight: "900", cursor: "pointer" };
