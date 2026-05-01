@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, collection, query, where, onSnapshot, doc, deleteDoc, addDoc, updateDoc } from "firebase/firestore";
+import { getFirestore, collection, query, where, onSnapshot, doc, deleteDoc, addDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 
 // --- Firebase 設定 ---
 const firebaseConfig = {
@@ -21,7 +21,7 @@ export default function TabletDisplay() {
   const [reservations, setReservations] = useState([]); 
   const [isEditing, setIsEditing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [roomName, setRoomName] = useState("会議室"); 
+  const [roomName, setRoomName] = useState("会議室①"); // 初期値をPC側のデフォルトに合わせました
   const [editingId, setEditingId] = useState(null);
 
   const getJSTDateStr = (date) => {
@@ -40,7 +40,6 @@ export default function TabletDisplay() {
   };
 
   const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
-  // ★ 会長、執行役員を追加 / 取締役を削除
   const userPresets = ["会長", "社長", "専務", "常務", "執行役員", "部長", "次長", "課長", "係長", "主任", "その他"];
   const purposePresets = ["会議", "来客", "面談", "面接", "その他"];
   
@@ -58,18 +57,13 @@ export default function TabletDisplay() {
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, "reservations"), where("room", "==", roomName));
+    // PC管理画面側の selectedItem フィールドと room フィールドの両方を考慮して監視
+    const q = query(collection(db, "reservations"), where("selectedItem", "==", roomName));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const currentDateStr = getJSTDateStr(currentTime);
       const currentTimeStr = getJSTTimeStr(currentTime);
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       const todayRes = allRes.filter(res => res.date === currentDateStr);
-
-      todayRes.forEach(async (res) => {
-        if (res.endTime < currentTimeStr) {
-          try { await deleteDoc(doc(db, "reservations", res.id)); } catch (e) { console.error(e); }
-        }
-      });
 
       const activeRes = todayRes
         .filter(res => res.endTime >= currentTimeStr)
@@ -80,9 +74,14 @@ export default function TabletDisplay() {
 
       if (current) {
         setData({ 
-          id: current.id, occupied: true, dept: current.department, user: current.name, 
-          purpose: current.purpose, clientName: current.clientName || "", 
-          guestCount: current.guestCount || "1", startTime: current.startTime, endTime: current.endTime 
+          id: current.id, occupied: true, 
+          dept: current.department || current.dept, 
+          user: current.name || current.user, 
+          purpose: current.purpose, 
+          clientName: current.extraInfo || current.clientName || "", 
+          guestCount: current.guestCount || "1", 
+          startTime: current.startTime, 
+          endTime: current.endTime 
         });
       } else {
         setData({ occupied: false });
@@ -100,10 +99,10 @@ export default function TabletDisplay() {
   const startEdit = (res) => {
     setEditingId(res.id);
     setForm({
-      dept: res.department,
-      user: res.name.split("、"),
+      dept: res.department || res.dept,
+      user: (res.name || res.user || "").split("、"),
       purpose: res.purpose,
-      clientName: res.clientName || "",
+      clientName: res.extraInfo || res.clientName || "",
       guestCount: res.guestCount || "1",
       startTime: res.startTime,
       endTime: res.endTime
@@ -120,23 +119,30 @@ export default function TabletDisplay() {
     if (isOverlapping) return alert("⚠️エラー：この時間帯は既に予約が入っています。");
 
     const dateStr = getJSTDateStr(new Date());
+    
+    // PC管理画面と項目名を完全に統一して保存
     const reservationData = {
-      room: roomName, 
-      department: form.dept, 
-      name: form.user.join("、"), 
-      purpose: form.purpose, 
-      clientName: form.clientName, 
-      guestCount: form.guestCount,
+      selectedItem: roomName, // 会議室名（PC側のキー）
+      room: roomName,         // 会議室名（タブレット側のキー）
+      department: form.dept,  // 部署名（PC側のキー）
+      dept: form.dept,        // 部署名
+      name: form.user.join("、"), // 利用者名（PC側のキー）
+      user: form.user.join("、"),
+      purpose: form.purpose,  
+      extraInfo: form.clientName, // 来客/行き先（PC側の新キー）
+      clientName: form.clientName, // 来客/行き先（互換用）
+      guestCount: String(form.guestCount),
       startTime: form.startTime, 
       endTime: form.endTime, 
-      date: dateStr, 
+      date: dateStr,
+      updatedAt: serverTimestamp()
     };
     
     try {
       if (editingId) {
         await updateDoc(doc(db, "reservations", editingId), reservationData);
       } else {
-        await addDoc(collection(db, "reservations"), { ...reservationData, createdAt: new Date() });
+        await addDoc(collection(db, "reservations"), { ...reservationData, createdAt: serverTimestamp() });
       }
       closeModal();
     } catch (e) { alert("保存に失敗しました"); }
@@ -195,7 +201,7 @@ export default function TabletDisplay() {
               <div style={resListStyle}>
                 {reservations.length > 0 ? reservations.map(res => (
                   <div key={res.id} onClick={() => startEdit(res)} style={{...resCardStyle, border: editingId === res.id ? "4px solid #D90429" : "none", backgroundColor: editingId === res.id ? "#fff" : "#eee"}}>
-                    <b>{res.startTime}-{res.endTime}</b><br/>{res.purpose}<br/><small>{res.name}</small>
+                    <b>{res.startTime}-{res.endTime}</b><br/>{res.purpose}<br/><small>{res.name || res.user}</small>
                   </div>
                 )) : <span style={{color:"#999"}}>予約なし</span>}
               </div>
@@ -207,7 +213,6 @@ export default function TabletDisplay() {
               <div style={sectionBox}><div style={sectionLabel}>3. 目的 & 人数</div><div style={{display:"flex", gap:"2vw"}}><div style={gridStyle}>{purposePresets.map(p => <button key={p} onClick={() => setForm({...form, purpose: p})} style={pBtnStyle(form.purpose === p)}>{p}</button>)}</div><select style={selectStyle} value={form.guestCount} onChange={e => setForm({...form, guestCount: e.target.value})}>{[...Array(9)].map((_, i) => <option key={i+1} value={i+1}>{i+1}名</option>)}</select></div>
               {form.purpose === "来客" && <input placeholder="社名を入力" style={inputStyle} value={form.clientName} onChange={e => setForm({...form, clientName: e.target.value})} />}</div>
               
-              {/* ★ 時間設定を入力式 (type="time") に変更 */}
               <div style={sectionBox}>
                 <div style={sectionLabel}>5. 時間設定 (自由入力)</div>
                 <div style={{display:"flex", justifyContent:"center", alignItems:"center", gap:"3vw"}}>
@@ -253,6 +258,5 @@ const gridStyle = { display: "flex", flexWrap: "wrap", gap: "1vw" };
 const pBtnStyle = (s) => ({ padding: "1.5vh 2vw", fontSize: "2vw", borderRadius: "10px", border: "none", backgroundColor: s ? "#1D3557" : "#ddd", color: s ? "#fff" : "#333", cursor: "pointer" });
 const selectStyle = { padding: "1vh", fontSize: "2vw", borderRadius: "10px" };
 const inputStyle = { width: "100%", padding: "1.5vh", fontSize: "2.5vw", borderRadius: "10px", border: "2px solid #2B9348", marginTop: "1vh" };
-// ★ 時間入力用のスタイル追加
 const timeInputStyle = { padding: "1.5vh 3vw", fontSize: "3vw", borderRadius: "10px", border: "2px solid #2B9348", textAlign: "center", backgroundColor: "#fff", fontWeight: "bold" };
 const actionBtnStyle = { flex: 1, padding: "2vh", fontSize: "3vw", color: "white", border: "none", borderRadius: "15px", fontWeight: "900", cursor: "pointer" };
