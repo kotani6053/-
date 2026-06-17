@@ -1,20 +1,18 @@
 "use client";
 import { useState, useEffect } from "react";
-import { initializeApp, getApps } from "firebase/app";
-import { getFirestore, collection, query, where, onSnapshot, doc, deleteDoc, addDoc, updateDoc, serverTimestamp } from "firebase/firestore";
-
-// --- Firebase 設定 ---
-const firebaseConfig = {
-  apiKey: "AIzaSyD-PNODScbGy7MMK3pZ6kmcljILm9BN6PU",
-  authDomain: "kotaniapp-4f017.firebaseapp.com",
-  projectId: "kotaniapp-4f017",
-  storageBucket: "kotaniapp-4f017.firebasestorage.app",
-  messagingSenderId: "623409374889",
-  appId: "1:623409374889:web:1931dc594ed5d4fd23abb8"
-};
-
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const db = getFirestore(app);
+// ★ firebase.js から db をインポートするように一本化
+import { db } from "./firebase";
+import { 
+  collection, 
+  query, 
+  where, 
+  onSnapshot, 
+  doc, 
+  deleteDoc, 
+  addDoc, 
+  updateDoc, 
+  serverTimestamp 
+} from "firebase/firestore";
 
 export default function TabletDisplay() {
   const [data, setData] = useState({ occupied: false });
@@ -51,7 +49,7 @@ export default function TabletDisplay() {
     if (roomParam) setRoomName(roomParam);
   }, []);
 
-  // 30秒ごとのタイマー（画面の「使用中/空室」の判定更新もここで行うように変更）
+  // 30秒ごとのタイマー
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -59,19 +57,19 @@ export default function TabletDisplay() {
     return () => clearInterval(timer);
   }, []);
 
-  // 🌟【修正】Firestoreの監視は roomName が変わった時だけ！currentTime は依存配列から外しました
+  // Firestoreの監視は roomName が変わった時だけ（currentTime は依存配列から除外）
   useEffect(() => {
     const q = query(collection(db, "reservations"), where("selectedItem", "==", roomName));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setReservations(allRes); // ここでは全データを一旦保持
+      setReservations(allRes);
     });
     
     return () => unsubscribe();
   }, [roomName]);
 
-  // 🌟【追加】時計の更新（30秒ごと）や、取得データの変化に合わせて、表示する「今日の予約」と「空室判定」を計算する
+  // 時計の更新やデータ変化に合わせて、手元で空室判定を計算
   useEffect(() => {
     const currentDateStr = getJSTDateStr(currentTime);
     const currentTimeStr = getJSTTimeStr(currentTime);
@@ -85,6 +83,7 @@ export default function TabletDisplay() {
     // 現在時刻で「使用中」の予約があるか判定
     const current = activeRes.find(res => res.startTime <= currentTimeStr && res.endTime >= currentTimeStr);
 
+    // ★ 構文エラーを else に修正
     if (current) {
       setData({ 
         id: current.id, occupied: true, 
@@ -96,10 +95,10 @@ export default function TabletDisplay() {
         startTime: current.startTime, 
         endTime: current.endTime 
       });
-    } : {
+    } else {
       setData({ occupied: false });
     }
-  }, [reservations, currentTime]); // reservationsデータが変わるか、30秒経ったときだけ計算（通信は発生しない）
+  }, [reservations, currentTime]);
 
   const handleFinishNow = async () => {
     if (data.id && window.confirm(`${roomName}を空室に戻しますか？`)) {
@@ -277,3 +276,4 @@ const selectStyle = { padding: "1vh", fontSize: "2vw", borderRadius: "10px" };
 const inputStyle = { width: "100%", padding: "1.5vh", fontSize: "2.5vw", borderRadius: "10px", border: "2px solid #2B9348", marginTop: "1vh" };
 const timeInputStyle = { padding: "1.5vh 3vw", fontSize: "3vw", borderRadius: "10px", border: "2px solid #2B9348", textAlign: "center", backgroundColor: "#fff", fontWeight: "bold" };
 const actionBtnStyle = { flex: 1, padding: "2vh", fontSize: "3vw", color: "white", border: "none", borderRadius: "15px", fontWeight: "900", cursor: "pointer" };
+const delBtn = { background: "none", color: "#ef4444", border: "none", padding: "2px 5px", cursor: "pointer", fontSize: "16px", fontWeight: "bold" };
