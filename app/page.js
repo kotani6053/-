@@ -21,7 +21,7 @@ export default function TabletDisplay() {
   const [reservations, setReservations] = useState([]); 
   const [isEditing, setIsEditing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [roomName, setRoomName] = useState("会議室①"); // 初期値をPC側のデフォルトに合わせました
+  const [roomName, setRoomName] = useState("会議室①");
   const [editingId, setEditingId] = useState(null);
 
   const getJSTDateStr = (date) => {
@@ -51,44 +51,55 @@ export default function TabletDisplay() {
     if (roomParam) setRoomName(roomParam);
   }, []);
 
+  // 30秒ごとのタイマー（画面の「使用中/空室」の判定更新もここで行うように変更）
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 30000); 
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30000); 
     return () => clearInterval(timer);
   }, []);
 
+  // 🌟【修正】Firestoreの監視は roomName が変わった時だけ！currentTime は依存配列から外しました
   useEffect(() => {
-    // PC管理画面側の selectedItem フィールドと room フィールドの両方を考慮して監視
     const q = query(collection(db, "reservations"), where("selectedItem", "==", roomName));
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const currentDateStr = getJSTDateStr(currentTime);
-      const currentTimeStr = getJSTTimeStr(currentTime);
       const allRes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const todayRes = allRes.filter(res => res.date === currentDateStr);
-
-      const activeRes = todayRes
-        .filter(res => res.endTime >= currentTimeStr)
-        .sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-      setReservations(activeRes);
-      const current = activeRes.find(res => res.startTime <= currentTimeStr && res.endTime >= currentTimeStr);
-
-      if (current) {
-        setData({ 
-          id: current.id, occupied: true, 
-          dept: current.department || current.dept, 
-          user: current.name || current.user, 
-          purpose: current.purpose, 
-          clientName: current.extraInfo || current.clientName || "", 
-          guestCount: current.guestCount || "1", 
-          startTime: current.startTime, 
-          endTime: current.endTime 
-        });
-      } else {
-        setData({ occupied: false });
-      }
+      setReservations(allRes); // ここでは全データを一旦保持
     });
+    
     return () => unsubscribe();
-  }, [roomName, currentTime]);
+  }, [roomName]);
+
+  // 🌟【追加】時計の更新（30秒ごと）や、取得データの変化に合わせて、表示する「今日の予約」と「空室判定」を計算する
+  useEffect(() => {
+    const currentDateStr = getJSTDateStr(currentTime);
+    const currentTimeStr = getJSTTimeStr(currentTime);
+
+    // 今日の予約だけに絞り込み、終了していないものをソート
+    const todayRes = reservations.filter(res => res.date === currentDateStr);
+    const activeRes = todayRes
+      .filter(res => res.endTime >= currentTimeStr)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    // 現在時刻で「使用中」の予約があるか判定
+    const current = activeRes.find(res => res.startTime <= currentTimeStr && res.endTime >= currentTimeStr);
+
+    if (current) {
+      setData({ 
+        id: current.id, occupied: true, 
+        dept: current.department || current.dept, 
+        user: current.name || current.user, 
+        purpose: current.purpose, 
+        clientName: current.extraInfo || current.clientName || "", 
+        guestCount: current.guestCount || "1", 
+        startTime: current.startTime, 
+        endTime: current.endTime 
+      });
+    } : {
+      setData({ occupied: false });
+    }
+  }, [reservations, currentTime]); // reservationsデータが変わるか、30秒経ったときだけ計算（通信は発生しない）
 
   const handleFinishNow = async () => {
     if (data.id && window.confirm(`${roomName}を空室に戻しますか？`)) {
@@ -120,17 +131,16 @@ export default function TabletDisplay() {
 
     const dateStr = getJSTDateStr(new Date());
     
-    // PC管理画面と項目名を完全に統一して保存
     const reservationData = {
-      selectedItem: roomName, // 会議室名（PC側のキー）
-      room: roomName,         // 会議室名（タブレット側のキー）
-      department: form.dept,  // 部署名（PC側のキー）
-      dept: form.dept,        // 部署名
-      name: form.user.join("、"), // 利用者名（PC側のキー）
+      selectedItem: roomName,
+      room: roomName,
+      department: form.dept,
+      dept: form.dept,
+      name: form.user.join("、"),
       user: form.user.join("、"),
       purpose: form.purpose,  
-      extraInfo: form.clientName, // 来客/行き先（PC側の新キー）
-      clientName: form.clientName, // 来客/行き先（互換用）
+      extraInfo: form.clientName,
+      clientName: form.clientName,
       guestCount: String(form.guestCount),
       startTime: form.startTime, 
       endTime: form.endTime, 
@@ -170,6 +180,11 @@ export default function TabletDisplay() {
     </div>
   );
 
+  // 今日以降のアクティブな予約のみモーダルに表示するためのフィルタ
+  const displayedReservations = reservations
+    .filter(res => res.date === getJSTDateStr(currentTime) && res.endTime >= getJSTTimeStr(currentTime))
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
   return (
     <div style={{ ...screenStyle, backgroundColor: data.occupied ? "#D90429" : "#2B9348" }}>
       <Clock />
@@ -197,9 +212,11 @@ export default function TabletDisplay() {
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
             <div style={sectionBox}>
-              <div style={sectionLabel}>{roomName} 今日の予約（タップで編集/削除）</div>
+              <div style={sectionLabel}>
+                {roomName} 今日の予約（タップで編集/削除）
+              </div>
               <div style={resListStyle}>
-                {reservations.length > 0 ? reservations.map(res => (
+                {displayedReservations.length > 0 ? displayedReservations.map(res => (
                   <div key={res.id} onClick={() => startEdit(res)} style={{...resCardStyle, border: editingId === res.id ? "4px solid #D90429" : "none", backgroundColor: editingId === res.id ? "#fff" : "#eee"}}>
                     <b>{res.startTime}-{res.endTime}</b><br/>{res.purpose}<br/><small>{res.name || res.user}</small>
                   </div>
@@ -241,7 +258,7 @@ export default function TabletDisplay() {
   );
 }
 
-// --- スタイル定義 ---
+// スタイル定義（変更なし）
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", textAlign: "center", overflow: "hidden", fontFamily: "sans-serif" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.15)", padding: "4vh 5vw", borderRadius: "40px", width: "85vw", marginBottom: "3vh" };
 const timeBadgeStyle = { display: "block", backgroundColor: "white", color: "#D90429", padding: "1vh", borderRadius: "60px", fontSize: "6vw", fontWeight: "900", marginTop: "2vh" };
