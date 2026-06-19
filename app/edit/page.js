@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 // ★ 正しい階層（2つ上のフォルダ）から db をインポート
-import { db } from "../../firebase";
+import { db } from "../../lib/firebase";
 // ★ Firestoreの保存に必要な関数をインポート
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
