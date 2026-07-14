@@ -43,7 +43,7 @@ export default function TabletDisplay() {
     if (official) {
       setData({ 
         occupied: true, 
-        id: official.id, // IDを保持
+        id: official.id,
         dept: official.department || official.dept, 
         user: official.name || official.user, 
         purpose: official.purpose, 
@@ -69,7 +69,7 @@ export default function TabletDisplay() {
     if (data.type === 'official') {
       const docRef = doc(db, "reservations", data.id);
       await setDoc(docRef, { endTime: getJSTTimeStr(new Date()) }, { merge: true });
-    } else {
+    } else if (tabletStatus) {
       await deleteDoc(doc(db, "tablet_status", tabletStatus.id));
     }
   };
@@ -133,5 +133,5 @@ const modalOverlayStyle = { position: "fixed", inset: 0, backgroundColor: "rgba(
 const modalContentStyle = { backgroundColor: "#fff", padding: "4vh", borderRadius: "30px", width: "85vw", display: "flex", flexDirection: "column", gap: "2.5vh", color: "#333" };
 const sectionLabel = { fontSize: "4vw", fontWeight: "900", textAlign: "left", color: "#222" };
 const gridStyle = { display: "flex", flexWrap: "wrap", gap: "1.5vw" };
-const pBtnStyle = (s) => ({ padding: "2vh 3vw", fontSize: "3.5vw", borderRadius: "12px", border: "none", backgroundColor: s ? "#2B9348" : "#eee", color: s ? "#fff" : "#333", cursor: "pointer" };
+const pBtnStyle = (s) => ({ padding: "2vh 3vw", fontSize: "3.5vw", borderRadius: "12px", border: "none", backgroundColor: s ? "#2B9348" : "#eee", color: s ? "#fff" : "#333", cursor: "pointer" });
 const actionBtnStyle = { padding: "2.5vh", fontSize: "4vw", color: "white", border: "none", borderRadius: "15px", fontWeight: "900", cursor: "pointer" };
