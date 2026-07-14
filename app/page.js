@@ -72,8 +72,14 @@ export default function TabletDisplay() {
       {data.occupied ? (
         <div style={infoBoxStyle}>
           <div style={{ fontSize: "7vw" }}>{data.purpose}</div>
+          {data.clientName && (
+            <>
+              <div style={{ fontSize: "4vw", marginTop: "2vh", color: "rgba(255,255,255,0.8)" }}>来客</div>
+              <div style={{ fontSize: "6vw" }}>{data.clientName} 様</div>
+            </>
+          )}
           <div style={{ fontSize: "5vw", marginTop: "2vh" }}>
-            {data.dept} ({data.user}) {data.clientName ? `${data.clientName} 様` : ""}
+            {data.dept} {data.user}
           </div>
           {data.type === 'tablet' && <button onClick={async () => { if(window.confirm("終了しますか？")) await deleteDoc(doc(db, "tablet_status", tabletStatus.id)) }} style={finishBtnStyle}>利用終了</button>}
         </div>
