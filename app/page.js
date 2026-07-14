@@ -8,6 +8,7 @@ export default function TabletDisplay() {
   const [reservations, setReservations] = useState([]);
   const [tabletStatus, setTabletStatus] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isFinishing, setIsFinishing] = useState(false); // 終了中フラグ
   const [showSchedule, setShowSchedule] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [roomName, setRoomName] = useState("会議室①");
@@ -23,10 +24,8 @@ export default function TabletDisplay() {
     const roomParam = new URLSearchParams(window.location.search).get("room") || "会議室①";
     setRoomName(roomParam);
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-
     const q1 = query(collection(db, "reservations"), where("selectedItem", "==", roomParam));
     const unsub1 = onSnapshot(q1, (snap) => setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    
     const q2 = query(collection(db, "tablet_status"), where("room", "==", roomParam));
     const unsub2 = onSnapshot(q2, (snap) => {
       const status = snap.docs.find(d => d.data().date === getJSTDateStr(new Date()));
@@ -36,26 +35,18 @@ export default function TabletDisplay() {
   }, [roomName]);
 
   useEffect(() => {
+    if (isFinishing) return; // 終了処理中は判定をスキップ
     const nowStr = getJSTTimeStr(currentTime);
     const dateStr = getJSTDateStr(currentTime);
     const official = reservations.find(r => r.date === dateStr && r.startTime <= nowStr && r.endTime >= nowStr);
-
     if (official) {
-      setData({ 
-        occupied: true, 
-        id: official.id,
-        dept: official.department || official.dept, 
-        user: official.name || official.user, 
-        purpose: official.purpose, 
-        clientName: official.clientName, 
-        type: 'official' 
-      });
+      setData({ occupied: true, id: official.id, dept: official.department || official.dept, user: official.name || official.user, purpose: official.purpose, clientName: official.clientName, type: 'official' });
     } else if (tabletStatus) {
       setData({ occupied: true, dept: tabletStatus.dept, user: tabletStatus.user, purpose: "今すぐ利用", type: 'tablet' });
     } else {
       setData({ occupied: false });
     }
-  }, [reservations, tabletStatus, currentTime]);
+  }, [reservations, tabletStatus, currentTime, isFinishing]);
 
   const handleStart = async () => {
     if (!form.dept || form.user.length === 0) return;
@@ -66,17 +57,14 @@ export default function TabletDisplay() {
 
   const handleFinish = async () => {
     if(!window.confirm("利用を終了しますか？")) return;
-    
-    // 即座に画面を空室状態に更新
+    setIsFinishing(true);
     setData({ occupied: false });
-
-    // Firebaseのデータを更新
     if (data.type === 'official') {
-      const docRef = doc(db, "reservations", data.id);
-      await setDoc(docRef, { endTime: getJSTTimeStr(new Date()) }, { merge: true });
+      await setDoc(doc(db, "reservations", data.id), { endTime: getJSTTimeStr(new Date()) }, { merge: true });
     } else if (tabletStatus) {
       await deleteDoc(doc(db, "tablet_status", tabletStatus.id));
     }
+    setTimeout(() => setIsFinishing(false), 3000); // 3秒間は判定を止める
   };
 
   const isFormValid = form.dept !== "" && form.user.length > 0;
@@ -84,7 +72,6 @@ export default function TabletDisplay() {
   return (
     <div style={{ ...screenStyle, backgroundColor: data.occupied ? "#D90429" : "#2B9348" }}>
       <div style={{ fontSize: data.occupied ? "14vw" : "24vw", fontWeight: "900" }}>{data.occupied ? "使用中" : "空室"}</div>
-      
       {data.occupied ? (
         <div style={infoBoxStyle}>
           <div style={{ fontSize: "7vw" }}>{data.purpose}</div>
@@ -95,9 +82,7 @@ export default function TabletDisplay() {
       ) : (
         <button onClick={() => setIsEditing(true)} style={startBtnStyle}>今すぐ利用開始</button>
       )}
-
       <button onClick={() => setShowSchedule(true)} style={scheduleBtnStyle}>本日の予定を確認</button>
-
       {showSchedule && (
         <div style={modalOverlayStyle}>
           <div style={{...modalContentStyle, height: "70vh", overflowY: "auto"}}>
@@ -112,7 +97,6 @@ export default function TabletDisplay() {
           </div>
         </div>
       )}
-
       {isEditing && (
         <div style={modalOverlayStyle}>
           <div style={modalContentStyle}>
