@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
-import { collection, query, where, onSnapshot, doc, deleteDoc, addDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, deleteDoc, addDoc, setDoc } from "firebase/firestore";
 
 export default function TabletDisplay() {
   const [data, setData] = useState({ occupied: false });
@@ -63,6 +63,16 @@ export default function TabletDisplay() {
     setForm({ dept: "", user: [] });
   };
 
+  const handleFinish = async () => {
+    if(!window.confirm("利用を終了しますか？")) return;
+    // tablet_status がある場合は削除、ない場合は何もしない（あるいは必要に応じて対応）
+    if (tabletStatus) {
+      await deleteDoc(doc(db, "tablet_status", tabletStatus.id));
+    } else {
+      alert("現在の予約は自動終了設定のため、終了操作はできません。");
+    }
+  };
+
   const isFormValid = form.dept !== "" && form.user.length > 0;
 
   return (
@@ -74,13 +84,12 @@ export default function TabletDisplay() {
           <div style={{ fontSize: "7vw" }}>{data.purpose}</div>
           {data.clientName && <div style={{ fontSize: "6vw", marginTop: "2vh" }}>{data.clientName} 様</div>}
           <div style={{ fontSize: "5vw", marginTop: "2vh" }}>{data.dept} {data.user}</div>
-          {data.type === 'tablet' && <button onClick={async () => { if(window.confirm("終了しますか？")) await deleteDoc(doc(db, "tablet_status", tabletStatus.id)) }} style={finishBtnStyle}>利用終了</button>}
+          <button onClick={handleFinish} style={finishBtnStyle}>利用終了</button>
         </div>
       ) : (
         <button onClick={() => setIsEditing(true)} style={startBtnStyle}>今すぐ利用開始</button>
       )}
 
-      {/* 予定確認ボタン（常時表示） */}
       <button onClick={() => setShowSchedule(true)} style={scheduleBtnStyle}>本日の予定を確認</button>
 
       {showSchedule && (
