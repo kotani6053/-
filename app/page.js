@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
-import { collection, query, where, onSnapshot, doc, deleteDoc, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, deleteDoc, addDoc } from "firebase/firestore";
 
 export default function TabletDisplay() {
   const [data, setData] = useState({ occupied: false });
@@ -21,19 +21,23 @@ export default function TabletDisplay() {
   useEffect(() => {
     const roomParam = new URLSearchParams(window.location.search).get("room") || "会議室①";
     setRoomName(roomParam);
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000); // 1分ごとに更新
+
     const q1 = query(collection(db, "reservations"), where("selectedItem", "==", roomParam));
     const unsub1 = onSnapshot(q1, (snap) => setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    
     const q2 = query(collection(db, "tablet_status"), where("room", "==", roomParam));
     const unsub2 = onSnapshot(q2, (snap) => {
       const status = snap.docs.find(d => d.data().date === getJSTDateStr(new Date()));
       setTabletStatus(status ? { id: status.id, ...status.data() } : null);
     });
-    return () => { unsub1(); unsub2(); };
+    return () => { clearInterval(timer); unsub1(); unsub2(); };
   }, [roomName]);
 
   useEffect(() => {
     const nowStr = getJSTTimeStr(currentTime);
     const dateStr = getJSTDateStr(currentTime);
+    // 正式予約を最優先で探索
     const official = reservations.find(r => r.date === dateStr && r.startTime <= nowStr && r.endTime >= nowStr);
 
     if (official) {
@@ -46,19 +50,13 @@ export default function TabletDisplay() {
   }, [reservations, tabletStatus, currentTime]);
 
   const handleStart = async () => {
-    if (!form.dept || form.user.length === 0) return alert("入力してください");
-    await addDoc(collection(db, "tablet_status"), {
-      room: roomName, dept: form.dept, user: form.user.join("、"),
-      date: getJSTDateStr(new Date())
-    });
+    if (!form.dept || form.user.length === 0) return;
+    await addDoc(collection(db, "tablet_status"), { room: roomName, dept: form.dept, user: form.user.join("、"), date: getJSTDateStr(new Date()) });
     setIsEditing(false);
+    setForm({ dept: "", user: [] });
   };
 
-  const handleFinish = async () => {
-    if (tabletStatus && window.confirm("利用を終了しますか？")) {
-      await deleteDoc(doc(db, "tablet_status", tabletStatus.id));
-    }
-  };
+  const isFormValid = form.dept !== "" && form.user.length > 0;
 
   return (
     <div style={{ ...screenStyle, backgroundColor: data.occupied ? "#D90429" : "#2B9348" }}>
@@ -67,7 +65,7 @@ export default function TabletDisplay() {
         <div style={infoBoxStyle}>
           <div style={{ fontSize: "7vw" }}>{data.type === 'official' ? data.purpose : "今すぐ利用"}</div>
           <div style={{ fontSize: "5vw", marginTop: "2vh" }}>{data.dept} ({data.user})</div>
-          {data.type === 'tablet' && <button onClick={handleFinish} style={finishBtnStyle}>利用終了</button>}
+          {data.type === 'tablet' && <button onClick={async () => { if(window.confirm("終了しますか？")) await deleteDoc(doc(db, "tablet_status", tabletStatus.id)) }} style={finishBtnStyle}>利用終了</button>}
         </div>
       ) : (
         <button onClick={() => setIsEditing(true)} style={startBtnStyle}>今すぐ利用開始</button>
@@ -80,7 +78,7 @@ export default function TabletDisplay() {
             <div style={gridStyle}>{deptPresets.map(d => <button key={d} onClick={() => setForm({...form, dept: d})} style={pBtnStyle(form.dept === d)}>{d}</button>)}</div>
             <div style={sectionLabel}>利用者</div>
             <div style={gridStyle}>{userPresets.map(u => <button key={u} onClick={() => { const n = form.user.includes(u) ? form.user.filter(x=>x!==u) : [...form.user, u]; setForm({...form, user: n}) }} style={pBtnStyle(form.user.includes(u))}>{u}</button>)}</div>
-            <button onClick={handleStart} style={actionBtnStyle}>開始する</button>
+            <button onClick={handleStart} style={{...actionBtnStyle, backgroundColor: isFormValid ? "#2B9348" : "#ccc"}}>開始する</button>
             <button onClick={() => setIsEditing(false)} style={{...actionBtnStyle, backgroundColor:"#888"}}>戻る</button>
           </div>
         </div>
