@@ -66,6 +66,11 @@ export default function TabletDisplay() {
 
   const handleFinish = async () => {
     if(!window.confirm("利用を終了しますか？")) return;
+    
+    // 即座に画面を空室状態に更新
+    setData({ occupied: false });
+
+    // Firebaseのデータを更新
     if (data.type === 'official') {
       const docRef = doc(db, "reservations", data.id);
       await setDoc(docRef, { endTime: getJSTTimeStr(new Date()) }, { merge: true });
