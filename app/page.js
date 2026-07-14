@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
-import { collection, query, where, onSnapshot, addDoc, deleteDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, deleteDoc, addDoc } from "firebase/firestore";
 
 export default function TabletDisplay() {
   const [data, setData] = useState({ occupied: false });
@@ -33,15 +33,22 @@ export default function TabletDisplay() {
       setTabletStatus(status ? { id: status.id, ...status.data() } : null);
     });
     return () => { clearInterval(timer); unsub1(); unsub2(); };
-  }, []);
+  }, [roomName]);
 
   useEffect(() => {
     const nowStr = getJSTTimeStr(currentTime);
     const dateStr = getJSTDateStr(currentTime);
-    const official = reservations.find(r => !r.isFinished && r.date === dateStr && r.startTime <= nowStr && r.endTime >= nowStr);
+    const official = reservations.find(r => r.date === dateStr && r.startTime <= nowStr && r.endTime >= nowStr);
 
     if (official) {
-      setData({ occupied: true, dept: official.department || official.dept, user: official.name || official.user, purpose: official.purpose, clientName: official.clientName, type: 'official' });
+      setData({ 
+        occupied: true, 
+        dept: official.department || official.dept, 
+        user: official.name || official.user, 
+        purpose: official.purpose, 
+        clientName: official.clientName, 
+        type: 'official' 
+      });
     } else if (tabletStatus) {
       setData({ occupied: true, dept: tabletStatus.dept, user: tabletStatus.user, purpose: "今すぐ利用", type: 'tablet' });
     } else {
@@ -56,32 +63,24 @@ export default function TabletDisplay() {
     setForm({ dept: "", user: [] });
   };
 
-  const handleFinish = async () => {
-    if(tabletStatus && window.confirm("利用を終了しますか？")) {
-      await deleteDoc(collection(db, "tablet_status", tabletStatus.id));
-    }
-  };
-
   const isFormValid = form.dept !== "" && form.user.length > 0;
 
   return (
     <div style={{ ...screenStyle, backgroundColor: data.occupied ? "#D90429" : "#2B9348" }}>
-      <div style={{ fontSize: "6vw", marginBottom: "2vh", fontWeight: "bold", opacity: 0.9 }}>{roomName}</div>
       <div style={{ fontSize: data.occupied ? "14vw" : "24vw", fontWeight: "900" }}>{data.occupied ? "使用中" : "空室"}</div>
       
       {data.occupied ? (
         <div style={infoBoxStyle}>
           <div style={{ fontSize: "7vw" }}>{data.purpose}</div>
+          {data.clientName && <div style={{ fontSize: "6vw", marginTop: "2vh" }}>{data.clientName} 様</div>}
           <div style={{ fontSize: "5vw", marginTop: "2vh" }}>{data.dept} {data.user}</div>
-          {/* 「今すぐ利用」の時だけ終了ボタンを表示 */}
-          {data.type === 'tablet' && (
-            <button onClick={handleFinish} style={finishBtnStyle}>利用を終了する</button>
-          )}
+          {data.type === 'tablet' && <button onClick={async () => { if(window.confirm("終了しますか？")) await deleteDoc(doc(db, "tablet_status", tabletStatus.id)) }} style={finishBtnStyle}>利用終了</button>}
         </div>
       ) : (
         <button onClick={() => setIsEditing(true)} style={startBtnStyle}>今すぐ利用開始</button>
       )}
 
+      {/* 予定確認ボタン（常時表示） */}
       <button onClick={() => setShowSchedule(true)} style={scheduleBtnStyle}>本日の予定を確認</button>
 
       {showSchedule && (
@@ -117,8 +116,8 @@ export default function TabletDisplay() {
 
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", textAlign: "center", fontFamily: "sans-serif" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.15)", padding: "4vh 5vw", borderRadius: "40px", width: "85vw" };
+const finishBtnStyle = { width: "60vw", height: "10vh", backgroundColor: "white", color: "#D90429", fontSize: "5vw", fontWeight: "900", borderRadius: "30px", border: "none", marginTop: "4vh", cursor: "pointer" };
 const startBtnStyle = { padding: "4vh 10vw", fontSize: "6vw", borderRadius: "100px", border: "none", backgroundColor: "white", color: "#2B9348", fontWeight: "900", cursor: "pointer" };
-const finishBtnStyle = { marginTop: "3vh", padding: "2vh 4vw", fontSize: "4vw", borderRadius: "50px", border: "2px solid white", backgroundColor: "transparent", color: "white", cursor: "pointer" };
 const scheduleBtnStyle = { marginTop: "5vh", padding: "2vh 6vw", fontSize: "4vw", borderRadius: "50px", border: "2px solid white", backgroundColor: "transparent", color: "white", cursor: "pointer" };
 const modalOverlayStyle = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
 const modalContentStyle = { backgroundColor: "#fff", padding: "4vh", borderRadius: "30px", width: "85vw", display: "flex", flexDirection: "column", gap: "2.5vh", color: "#333" };
