@@ -46,7 +46,7 @@ export default function TabletDisplay() {
         dept: official.department || official.dept, 
         user: official.name || official.user, 
         purpose: official.purpose, 
-        clientName: official.clientName,
+        clientName: official.clientName, 
         type: 'official' 
       });
     } else if (tabletStatus) {
@@ -73,9 +73,7 @@ export default function TabletDisplay() {
         <div style={infoBoxStyle}>
           <div style={{ fontSize: "7vw" }}>{data.purpose}</div>
           <div style={{ fontSize: "5vw", marginTop: "2vh" }}>
-            {data.dept} ({data.user})
-            {/* 来客名がある場合のみ表示。ここに来客者名を直接表示 */}
-            {data.clientName ? ` (${data.clientName} 様)` : ""}
+            {data.dept} ({data.user}) {data.clientName ? `${data.clientName} 様` : ""}
           </div>
           {data.type === 'tablet' && <button onClick={async () => { if(window.confirm("終了しますか？")) await deleteDoc(doc(db, "tablet_status", tabletStatus.id)) }} style={finishBtnStyle}>利用終了</button>}
         </div>
@@ -92,7 +90,7 @@ export default function TabletDisplay() {
             {reservations.filter(r => r.date === getJSTDateStr(new Date())).sort((a,b) => a.startTime.localeCompare(b.startTime)).map(r => (
               <div key={r.id} style={{ padding: "1.5vh 0", borderBottom: "1px solid #eee", fontSize: "4vw" }}>
                 <div><strong>{r.startTime} - {r.endTime}</strong></div>
-                <div>{r.name} ({r.department}) - {r.purpose} {r.clientName ? ` (${r.clientName} 様)` : ""}</div>
+                <div>{r.name} ({r.department}) - {r.purpose} {r.clientName ? `${r.clientName} 様` : ""}</div>
               </div>
             ))}
             <button onClick={() => setShowSchedule(false)} style={{...actionBtnStyle, backgroundColor:"#888", marginTop: "2vh"}}>閉じる</button>
@@ -125,5 +123,5 @@ const modalOverlayStyle = { position: "fixed", inset: 0, backgroundColor: "rgba(
 const modalContentStyle = { backgroundColor: "#fff", padding: "4vh", borderRadius: "30px", width: "85vw", display: "flex", flexDirection: "column", gap: "2.5vh", color: "#333" };
 const sectionLabel = { fontSize: "4vw", fontWeight: "900", textAlign: "left", color: "#222" };
 const gridStyle = { display: "flex", flexWrap: "wrap", gap: "1.5vw" };
-const pBtnStyle = (s) => ({ padding: "2vh 3vw", fontSize: "3.5vw", borderRadius: "12px", border: "none", backgroundColor: s ? "#2B9348" : "#eee", color: s ? "#fff" : "#333", cursor: "pointer" };
+const pBtnStyle = (s) => ({ padding: "2vh 3vw", fontSize: "3.5vw", borderRadius: "12px", border: "none", backgroundColor: s ? "#2B9348" : "#eee", color: s ? "#fff" : "#333", cursor: "pointer" });
 const actionBtnStyle = { padding: "2.5vh", fontSize: "4vw", color: "white", border: "none", borderRadius: "15px", fontWeight: "900", cursor: "pointer" };
