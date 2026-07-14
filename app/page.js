@@ -67,6 +67,9 @@ export default function TabletDisplay() {
 
   return (
     <div style={{ ...screenStyle, backgroundColor: data.occupied ? "#D90429" : "#2B9348" }}>
+      {/* 部屋名表示エリア */}
+      <div style={{ fontSize: "6vw", marginBottom: "3vh", opacity: 0.9, fontWeight: "bold" }}>{roomName}</div>
+      
       <div style={{ fontSize: data.occupied ? "14vw" : "24vw", fontWeight: "900" }}>{data.occupied ? "使用中" : "空室"}</div>
       
       {data.occupied ? (
@@ -80,7 +83,6 @@ export default function TabletDisplay() {
         <button onClick={() => setIsEditing(true)} style={startBtnStyle}>今すぐ利用開始</button>
       )}
 
-      {/* 予定確認ボタン（常時表示） */}
       <button onClick={() => setShowSchedule(true)} style={scheduleBtnStyle}>本日の予定を確認</button>
 
       {showSchedule && (
