@@ -8,6 +8,7 @@ export default function TabletDisplay() {
   const [reservations, setReservations] = useState([]);
   const [tabletStatus, setTabletStatus] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false); // 予定確認用のステート
   const [currentTime, setCurrentTime] = useState(new Date());
   const [roomName, setRoomName] = useState("会議室①");
 
@@ -21,7 +22,7 @@ export default function TabletDisplay() {
   useEffect(() => {
     const roomParam = new URLSearchParams(window.location.search).get("room") || "会議室①";
     setRoomName(roomParam);
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000); // 1分ごとに更新
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
 
     const q1 = query(collection(db, "reservations"), where("selectedItem", "==", roomParam));
     const unsub1 = onSnapshot(q1, (snap) => setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -40,7 +41,14 @@ export default function TabletDisplay() {
     const official = reservations.find(r => r.date === dateStr && r.startTime <= nowStr && r.endTime >= nowStr);
 
     if (official) {
-      setData({ occupied: true, dept: official.department || official.dept, user: official.name || official.user, purpose: official.purpose, type: 'official' });
+      setData({ 
+        occupied: true, 
+        dept: official.department || official.dept, 
+        user: official.name || official.user, 
+        purpose: official.purpose, 
+        clientName: official.clientName, // 来客名追加
+        type: 'official' 
+      });
     } else if (tabletStatus) {
       setData({ occupied: true, dept: tabletStatus.dept, user: tabletStatus.user, purpose: "今すぐ利用", type: 'tablet' });
     } else {
@@ -64,24 +72,33 @@ export default function TabletDisplay() {
       {data.occupied ? (
         <div style={infoBoxStyle}>
           <div style={{ fontSize: "7vw" }}>{data.purpose}</div>
-          <div style={{ fontSize: "5vw", marginTop: "2vh" }}>{data.dept} ({data.user})</div>
+          <div style={{ fontSize: "5vw", marginTop: "2vh" }}>
+            {data.dept} ({data.user}){data.clientName ? ` (${data.clientName} 様)` : ""}
+          </div>
           {data.type === 'tablet' && <button onClick={async () => { if(window.confirm("終了しますか？")) await deleteDoc(doc(db, "tablet_status", tabletStatus.id)) }} style={finishBtnStyle}>利用終了</button>}
         </div>
       ) : (
         <button onClick={() => setIsEditing(true)} style={startBtnStyle}>今すぐ利用開始</button>
       )}
 
-      {/* 今日の予約一覧表示エリア追加 */}
-      <div style={{ width: "85vw", marginTop: "4vh", backgroundColor: "rgba(0,0,0,0.1)", borderRadius: "20px", padding: "2vh" }}>
-        <div style={{ fontSize: "3vw", fontWeight: "bold", marginBottom: "1vh" }}>本日の予定</div>
-        <div style={{ maxHeight: "20vh", overflowY: "auto" }}>
-          {reservations.filter(r => r.date === getJSTDateStr(new Date())).sort((a,b) => a.startTime.localeCompare(b.startTime)).map(r => (
-            <div key={r.id} style={{ fontSize: "2.5vw", padding: "0.5vh 0", borderBottom: "1px solid rgba(255,255,255,0.2)" }}>
-              {r.startTime}-{r.endTime} : {r.name} ({r.purpose})
-            </div>
-          ))}
+      {/* 予定確認ボタン */}
+      <button onClick={() => setShowSchedule(true)} style={scheduleBtnStyle}>本日の予定を確認</button>
+
+      {/* 予定確認用モーダル */}
+      {showSchedule && (
+        <div style={modalOverlayStyle}>
+          <div style={{...modalContentStyle, height: "70vh", overflowY: "auto"}}>
+            <div style={sectionLabel}>本日の予約一覧</div>
+            {reservations.filter(r => r.date === getJSTDateStr(new Date())).sort((a,b) => a.startTime.localeCompare(b.startTime)).map(r => (
+              <div key={r.id} style={{ padding: "1.5vh 0", borderBottom: "1px solid #eee", fontSize: "4vw" }}>
+                <div><strong>{r.startTime} - {r.endTime}</strong></div>
+                <div>{r.name} ({r.department}) - {r.purpose}</div>
+              </div>
+            ))}
+            <button onClick={() => setShowSchedule(false)} style={{...actionBtnStyle, backgroundColor:"#888", marginTop: "2vh"}}>閉じる</button>
+          </div>
         </div>
-      </div>
+      )}
 
       {isEditing && (
         <div style={modalOverlayStyle}>
@@ -99,10 +116,12 @@ export default function TabletDisplay() {
   );
 }
 
+// スタイルは維持
 const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", textAlign: "center", fontFamily: "sans-serif" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.15)", padding: "4vh 5vw", borderRadius: "40px", width: "85vw" };
 const finishBtnStyle = { width: "60vw", height: "10vh", backgroundColor: "white", color: "#D90429", fontSize: "5vw", fontWeight: "900", borderRadius: "30px", border: "none", marginTop: "4vh", cursor: "pointer" };
 const startBtnStyle = { padding: "4vh 10vw", fontSize: "6vw", borderRadius: "100px", border: "none", backgroundColor: "white", color: "#2B9348", fontWeight: "900", cursor: "pointer" };
+const scheduleBtnStyle = { marginTop: "5vh", padding: "2vh 6vw", fontSize: "4vw", borderRadius: "50px", border: "2px solid white", backgroundColor: "transparent", color: "white", cursor: "pointer" };
 const modalOverlayStyle = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
 const modalContentStyle = { backgroundColor: "#fff", padding: "4vh", borderRadius: "30px", width: "85vw", display: "flex", flexDirection: "column", gap: "2.5vh", color: "#333" };
 const sectionLabel = { fontSize: "4vw", fontWeight: "900", textAlign: "left", color: "#222" };
