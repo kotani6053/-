@@ -37,11 +37,10 @@ export default function TabletDisplay() {
   useEffect(() => {
     const nowStr = getJSTTimeStr(currentTime);
     const dateStr = getJSTDateStr(currentTime);
-    // 正式予約を最優先で探索
     const official = reservations.find(r => r.date === dateStr && r.startTime <= nowStr && r.endTime >= nowStr);
 
     if (official) {
-      setData({ occupied: true, ...official, type: 'official' });
+      setData({ occupied: true, dept: official.department || official.dept, user: official.name || official.user, purpose: official.purpose, type: 'official' });
     } else if (tabletStatus) {
       setData({ occupied: true, dept: tabletStatus.dept, user: tabletStatus.user, purpose: "今すぐ利用", type: 'tablet' });
     } else {
@@ -61,15 +60,28 @@ export default function TabletDisplay() {
   return (
     <div style={{ ...screenStyle, backgroundColor: data.occupied ? "#D90429" : "#2B9348" }}>
       <div style={{ fontSize: data.occupied ? "14vw" : "24vw", fontWeight: "900" }}>{data.occupied ? "使用中" : "空室"}</div>
+      
       {data.occupied ? (
         <div style={infoBoxStyle}>
-          <div style={{ fontSize: "7vw" }}>{data.type === 'official' ? data.purpose : "今すぐ利用"}</div>
+          <div style={{ fontSize: "7vw" }}>{data.purpose}</div>
           <div style={{ fontSize: "5vw", marginTop: "2vh" }}>{data.dept} ({data.user})</div>
           {data.type === 'tablet' && <button onClick={async () => { if(window.confirm("終了しますか？")) await deleteDoc(doc(db, "tablet_status", tabletStatus.id)) }} style={finishBtnStyle}>利用終了</button>}
         </div>
       ) : (
         <button onClick={() => setIsEditing(true)} style={startBtnStyle}>今すぐ利用開始</button>
       )}
+
+      {/* 今日の予約一覧表示エリア追加 */}
+      <div style={{ width: "85vw", marginTop: "4vh", backgroundColor: "rgba(0,0,0,0.1)", borderRadius: "20px", padding: "2vh" }}>
+        <div style={{ fontSize: "3vw", fontWeight: "bold", marginBottom: "1vh" }}>本日の予定</div>
+        <div style={{ maxHeight: "20vh", overflowY: "auto" }}>
+          {reservations.filter(r => r.date === getJSTDateStr(new Date())).sort((a,b) => a.startTime.localeCompare(b.startTime)).map(r => (
+            <div key={r.id} style={{ fontSize: "2.5vw", padding: "0.5vh 0", borderBottom: "1px solid rgba(255,255,255,0.2)" }}>
+              {r.startTime}-{r.endTime} : {r.name} ({r.purpose})
+            </div>
+          ))}
+        </div>
+      </div>
 
       {isEditing && (
         <div style={modalOverlayStyle}>
