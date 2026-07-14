@@ -8,7 +8,7 @@ export default function TabletDisplay() {
   const [reservations, setReservations] = useState([]);
   const [tabletStatus, setTabletStatus] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [isFinishing, setIsFinishing] = useState(false); // 終了中フラグ
+  const [ignoreList, setIgnoreList] = useState([]); // 終了済みIDを一時的に無視するリスト
   const [showSchedule, setShowSchedule] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [roomName, setRoomName] = useState("会議室①");
@@ -35,18 +35,23 @@ export default function TabletDisplay() {
   }, [roomName]);
 
   useEffect(() => {
-    if (isFinishing) return; // 終了処理中は判定をスキップ
     const nowStr = getJSTTimeStr(currentTime);
     const dateStr = getJSTDateStr(currentTime);
-    const official = reservations.find(r => r.date === dateStr && r.startTime <= nowStr && r.endTime >= nowStr);
+    
+    // ignoreListに含まれるIDは除外して検索
+    const official = reservations.find(r => 
+      !ignoreList.includes(r.id) && 
+      r.date === dateStr && r.startTime <= nowStr && r.endTime >= nowStr
+    );
+
     if (official) {
       setData({ occupied: true, id: official.id, dept: official.department || official.dept, user: official.name || official.user, purpose: official.purpose, clientName: official.clientName, type: 'official' });
-    } else if (tabletStatus) {
-      setData({ occupied: true, dept: tabletStatus.dept, user: tabletStatus.user, purpose: "今すぐ利用", type: 'tablet' });
+    } else if (tabletStatus && !ignoreList.includes(tabletStatus.id)) {
+      setData({ occupied: true, id: tabletStatus.id, dept: tabletStatus.dept, user: tabletStatus.user, purpose: "今すぐ利用", type: 'tablet' });
     } else {
       setData({ occupied: false });
     }
-  }, [reservations, tabletStatus, currentTime, isFinishing]);
+  }, [reservations, tabletStatus, currentTime, ignoreList]);
 
   const handleStart = async () => {
     if (!form.dept || form.user.length === 0) return;
@@ -57,14 +62,16 @@ export default function TabletDisplay() {
 
   const handleFinish = async () => {
     if(!window.confirm("利用を終了しますか？")) return;
-    setIsFinishing(true);
+    
+    // 終了したIDを無視リストに追加して即座に画面を空室に
+    setIgnoreList(prev => [...prev, data.id]);
     setData({ occupied: false });
+
     if (data.type === 'official') {
       await setDoc(doc(db, "reservations", data.id), { endTime: getJSTTimeStr(new Date()) }, { merge: true });
-    } else if (tabletStatus) {
-      await deleteDoc(doc(db, "tablet_status", tabletStatus.id));
+    } else {
+      await deleteDoc(doc(db, "tablet_status", data.id));
     }
-    setTimeout(() => setIsFinishing(false), 3000); // 3秒間は判定を止める
   };
 
   const isFormValid = form.dept !== "" && form.user.length > 0;
