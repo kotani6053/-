@@ -1,18 +1,23 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, addDoc } from "firebase/firestore";
 
 export default function TabletDisplay() {
   const [data, setData] = useState({ occupied: false });
   const [reservations, setReservations] = useState([]);
   const [tabletStatus, setTabletStatus] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [roomName, setRoomName] = useState("会議室①");
 
   const getJSTDateStr = (date) => new Date(date.getTime() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0];
   const getJSTTimeStr = (date) => new Date(date.getTime() + (9 * 60 * 60 * 1000)).toISOString().split('T')[1].substring(0, 5);
+
+  const deptPresets = ["新門司製造部", "新門司セラミック", "総務部", "役員", "その他"];
+  const userPresets = ["会長", "社長", "専務", "常務", "執行役員", "部長", "次長", "課長", "係長", "主任", "その他"];
+  const [form, setForm] = useState({ dept: "", user: [] });
 
   useEffect(() => {
     const roomParam = new URLSearchParams(window.location.search).get("room") || "会議室①";
@@ -44,19 +49,27 @@ export default function TabletDisplay() {
     }
   }, [reservations, tabletStatus, currentTime]);
 
+  const handleStart = async () => {
+    if (!form.dept || form.user.length === 0) return;
+    await addDoc(collection(db, "tablet_status"), { room: roomName, dept: form.dept, user: form.user.join("、"), date: getJSTDateStr(new Date()) });
+    setIsEditing(false);
+    setForm({ dept: "", user: [] });
+  };
+
+  const isFormValid = form.dept !== "" && form.user.length > 0;
+
   return (
-    <div style={screenStyle}>
-      {/* 部屋名を一番上に固定表示 */}
+    <div style={{ ...screenStyle, backgroundColor: data.occupied ? "#D90429" : "#2B9348" }}>
       <div style={{ fontSize: "6vw", marginBottom: "2vh", fontWeight: "bold", opacity: 0.9 }}>{roomName}</div>
-      
       <div style={{ fontSize: data.occupied ? "14vw" : "24vw", fontWeight: "900" }}>{data.occupied ? "使用中" : "空室"}</div>
       
-      {data.occupied && (
+      {data.occupied ? (
         <div style={infoBoxStyle}>
           <div style={{ fontSize: "7vw" }}>{data.purpose}</div>
-          {data.clientName && <div style={{ fontSize: "6vw", marginTop: "2vh" }}>{data.clientName} 様</div>}
           <div style={{ fontSize: "5vw", marginTop: "2vh" }}>{data.dept} {data.user}</div>
         </div>
+      ) : (
+        <button onClick={() => setIsEditing(true)} style={startBtnStyle}>今すぐ利用開始</button>
       )}
 
       <button onClick={() => setShowSchedule(true)} style={scheduleBtnStyle}>本日の予定を確認</button>
@@ -75,18 +88,30 @@ export default function TabletDisplay() {
           </div>
         </div>
       )}
+
+      {isEditing && (
+        <div style={modalOverlayStyle}>
+          <div style={modalContentStyle}>
+            <div style={sectionLabel}>利用部署</div>
+            <div style={gridStyle}>{deptPresets.map(d => <button key={d} onClick={() => setForm({...form, dept: d})} style={pBtnStyle(form.dept === d)}>{d}</button>)}</div>
+            <div style={sectionLabel}>利用者</div>
+            <div style={gridStyle}>{userPresets.map(u => <button key={u} onClick={() => { const n = form.user.includes(u) ? form.user.filter(x=>x!==u) : [...form.user, u]; setForm({...form, user: n}) }} style={pBtnStyle(form.user.includes(u))}>{u}</button>)}</div>
+            <button onClick={handleStart} style={{...actionBtnStyle, backgroundColor: isFormValid ? "#2B9348" : "#ccc"}}>開始する</button>
+            <button onClick={() => setIsEditing(false)} style={{...actionBtnStyle, backgroundColor:"#888"}}>戻る</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", textAlign: "center", fontFamily: "sans-serif", backgroundColor: "#2B9348" };
-// 状態による背景色変更は style内で直接指定するか、この値を動的に切り替えてください
-// 今回は上記screenStyleで標準を空室カラーにしています
-// 実装上は style={{...screenStyle, backgroundColor: data.occupied ? "#D90429" : "#2B9348"}} としてください
-
+const screenStyle = { height: "100vh", width: "100vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "white", textAlign: "center", fontFamily: "sans-serif" };
 const infoBoxStyle = { backgroundColor: "rgba(0,0,0,0.15)", padding: "4vh 5vw", borderRadius: "40px", width: "85vw" };
+const startBtnStyle = { padding: "4vh 10vw", fontSize: "6vw", borderRadius: "100px", border: "none", backgroundColor: "white", color: "#2B9348", fontWeight: "900", cursor: "pointer" };
 const scheduleBtnStyle = { marginTop: "5vh", padding: "2vh 6vw", fontSize: "4vw", borderRadius: "50px", border: "2px solid white", backgroundColor: "transparent", color: "white", cursor: "pointer" };
 const modalOverlayStyle = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
 const modalContentStyle = { backgroundColor: "#fff", padding: "4vh", borderRadius: "30px", width: "85vw", display: "flex", flexDirection: "column", gap: "2.5vh", color: "#333" };
 const sectionLabel = { fontSize: "4vw", fontWeight: "900", textAlign: "left", color: "#222" };
+const gridStyle = { display: "flex", flexWrap: "wrap", gap: "1.5vw" };
+const pBtnStyle = (s) => ({ padding: "2vh 3vw", fontSize: "3.5vw", borderRadius: "12px", border: "none", backgroundColor: s ? "#2B9348" : "#eee", color: s ? "#fff" : "#333", cursor: "pointer" });
 const actionBtnStyle = { padding: "2.5vh", fontSize: "4vw", color: "white", border: "none", borderRadius: "15px", fontWeight: "900", cursor: "pointer" };
